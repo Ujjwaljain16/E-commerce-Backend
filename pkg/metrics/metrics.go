@@ -7,6 +7,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Prometheus metrics are intentionally global for registration with the default registry.
+//
+//nolint:gochecknoglobals // Prometheus metrics must be global variables
 var (
 	// GRPCRequestsTotal tracks total number of gRPC requests
 	GRPCRequestsTotal = promauto.NewCounterVec(

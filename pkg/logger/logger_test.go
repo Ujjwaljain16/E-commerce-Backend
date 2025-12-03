@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+type contextKey string
+
+const traceIDKey contextKey = "trace_id"
+
 func TestLogger_Info(t *testing.T) {
 	logger := New("test-service")
 	ctx := context.Background()
@@ -28,7 +32,7 @@ func TestLogger_Error(t *testing.T) {
 
 func TestLogger_WithTraceID(t *testing.T) {
 	logger := New("test-service")
-	ctx := context.WithValue(context.Background(), "trace_id", "trace-123")
+	ctx := context.WithValue(context.Background(), traceIDKey, "trace-123")
 
 	logger.Info(ctx, "message with trace", nil)
 }
