@@ -13,6 +13,7 @@ import (
 // LogLevel represents the severity of a log entry
 type LogLevel string
 
+// Log level constants for structured logging.
 const (
 	DEBUG LogLevel = "DEBUG"
 	INFO  LogLevel = "INFO"
