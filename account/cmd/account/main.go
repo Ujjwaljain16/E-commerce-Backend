@@ -19,7 +19,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	
+
 	// Initialize logger
 	log := logger.New("account-service")
 	log.Info(ctx, "Starting Account Service", nil)
