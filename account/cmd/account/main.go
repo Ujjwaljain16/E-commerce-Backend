@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net"
@@ -17,9 +18,11 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+	
 	// Initialize logger
 	log := logger.New("account-service")
-	log.Info(nil, "Starting Account Service", nil)
+	log.Info(ctx, "Starting Account Service", nil)
 
 	// Get configuration from environment
 	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ecommerce?sslmode=disable")
@@ -29,7 +32,7 @@ func main() {
 	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Error(nil, "Failed to connect to database", map[string]interface{}{
+		log.Error(ctx, "Failed to connect to database", map[string]interface{}{
 			"error": err.Error(),
 		})
 		os.Exit(1)
@@ -38,12 +41,12 @@ func main() {
 
 	// Test database connection
 	if err := db.Ping(); err != nil {
-		log.Error(nil, "Failed to ping database", map[string]interface{}{
+		log.Error(ctx, "Failed to ping database", map[string]interface{}{
 			"error": err.Error(),
 		})
 		os.Exit(1)
 	}
-	log.Info(nil, "Connected to database", nil)
+	log.Info(ctx, "Connected to database", nil)
 
 	// Create repository and service
 	repo := account.NewRepository(db)
@@ -59,14 +62,14 @@ func main() {
 	// Start server
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		log.Error(nil, "Failed to listen", map[string]interface{}{
+		log.Error(ctx, "Failed to listen", map[string]interface{}{
 			"error": err.Error(),
 			"port":  port,
 		})
 		os.Exit(1)
 	}
 
-	log.Info(nil, "Account Service listening", map[string]interface{}{
+	log.Info(ctx, "Account Service listening", map[string]interface{}{
 		"port": port,
 	})
 
@@ -76,14 +79,14 @@ func main() {
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
 
-		log.Info(nil, "Shutting down gracefully", nil)
+		log.Info(ctx, "Shutting down gracefully", nil)
 		grpcServer.GracefulStop()
 		repo.Close()
 	}()
 
 	// Start serving
 	if err := grpcServer.Serve(listener); err != nil {
-		log.Error(nil, "Failed to serve", map[string]interface{}{
+		log.Error(ctx, "Failed to serve", map[string]interface{}{
 			"error": err.Error(),
 		})
 		os.Exit(1)
