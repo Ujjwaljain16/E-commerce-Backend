@@ -16,14 +16,14 @@ import (
 // Service implements the AccountService gRPC interface
 type Service struct {
 	pb.UnimplementedAccountServiceServer
-	repo        Repository
+	repo         Repository
 	tokenService *auth.TokenService
 }
 
 // NewService creates a new account service
 func NewService(repo Repository, jwtSecret string) *Service {
 	return &Service{
-		repo:        repo,
+		repo:         repo,
 		tokenService: auth.NewTokenService(jwtSecret, 15*time.Minute, 7*24*time.Hour),
 	}
 }
@@ -35,8 +35,8 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		return nil, status.Error(codes.InvalidArgument, "email, password, and name are required")
 	}
 
-	// Create account
-	account, err := s.repo.Create(ctx, req.Email, req.Password, req.Name, req.Phone)
+	// Create account with default USER role
+	account, err := s.repo.Create(ctx, req.Email, req.Password, req.Name, req.Phone, "USER")
 	if err != nil {
 		if errors.Is(err, ErrEmailAlreadyExists) {
 			return nil, status.Error(codes.AlreadyExists, "email already exists")
@@ -44,8 +44,8 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		return nil, status.Error(codes.Internal, "failed to create account")
 	}
 
-	// Generate tokens using auth package
-	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, "USER")
+	// Generate tokens using auth package with account role
+	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, account.Role)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -56,6 +56,7 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 			Email:      account.Email,
 			Name:       account.Name,
 			Phone:      account.Phone,
+			Role:       account.Role,
 			CreatedAt:  timestamppb.New(account.CreatedAt),
 			UpdatedAt:  timestamppb.New(account.UpdatedAt),
 			IsVerified: account.IsVerified,
@@ -81,8 +82,8 @@ func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginRes
 		return nil, status.Error(codes.Internal, "failed to verify credentials")
 	}
 
-	// Generate tokens using auth package
-	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, "USER")
+	// Generate tokens using auth package with account role
+	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, account.Role)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -93,6 +94,7 @@ func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginRes
 			Email:      account.Email,
 			Name:       account.Name,
 			Phone:      account.Phone,
+			Role:       account.Role,
 			CreatedAt:  timestamppb.New(account.CreatedAt),
 			UpdatedAt:  timestamppb.New(account.UpdatedAt),
 			IsVerified: account.IsVerified,
@@ -123,6 +125,7 @@ func (s *Service) GetProfile(ctx context.Context, req *pb.GetProfileRequest) (*p
 			Email:      account.Email,
 			Name:       account.Name,
 			Phone:      account.Phone,
+			Role:       account.Role,
 			CreatedAt:  timestamppb.New(account.CreatedAt),
 			UpdatedAt:  timestamppb.New(account.UpdatedAt),
 			IsVerified: account.IsVerified,
@@ -151,6 +154,7 @@ func (s *Service) UpdateProfile(ctx context.Context, req *pb.UpdateProfileReques
 			Email:      account.Email,
 			Name:       account.Name,
 			Phone:      account.Phone,
+			Role:       account.Role,
 			CreatedAt:  timestamppb.New(account.CreatedAt),
 			UpdatedAt:  timestamppb.New(account.UpdatedAt),
 			IsVerified: account.IsVerified,
