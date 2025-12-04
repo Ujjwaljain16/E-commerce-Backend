@@ -82,6 +82,9 @@ func (l *Logger) log(ctx context.Context, level LogLevel, message string, data m
 
 // getTraceID extracts trace ID from context for distributed tracing
 func getTraceID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
 	if traceID := ctx.Value("trace_id"); traceID != nil {
 		if id, ok := traceID.(string); ok {
 			return id
