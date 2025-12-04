@@ -26,8 +26,10 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ecommerce?sslmode=disable
       JWT_SECRET: dev-secret-change-in-production
       PORT: 50051
+      METRICS_PORT: 9090
     ports:
       - "50051:50051"
+      - "9090:9090"
     depends_on:
       postgres:
         condition: service_healthy

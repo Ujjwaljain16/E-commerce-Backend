@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +13,9 @@ import (
 	"github.com/Ujjwaljain16/E-commerce-Backend/account"
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/metrics"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -30,6 +33,7 @@ func main() {
 	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ecommerce?sslmode=disable")
 	jwtSecret := getEnv("JWT_SECRET", "your-secret-key-change-in-production")
 	port := getEnv("PORT", "50051")
+	metricsPort := getEnv("METRICS_PORT", "9090")
 
 	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
@@ -54,8 +58,10 @@ func main() {
 	repo := account.NewRepository(db)
 	service := account.NewService(repo, jwtSecret)
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	// Create gRPC server with metrics interceptor
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor("account-service")),
+	)
 	pb.RegisterAccountServiceServer(grpcServer, service)
 
 	// Register health check service
@@ -67,7 +73,21 @@ func main() {
 	// Enable reflection for grpcurl/grpcui
 	reflection.Register(grpcServer)
 
-	// Start server
+	// Start Prometheus metrics HTTP server
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		metricsAddr := fmt.Sprintf(":%s", metricsPort)
+		log.Info(ctx, "Metrics server listening", map[string]interface{}{
+			"port": metricsPort,
+		})
+		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
+			log.Error(ctx, "Metrics server failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}()
+
+	// Start gRPC server
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		log.Error(ctx, "Failed to listen", map[string]interface{}{
@@ -78,7 +98,8 @@ func main() {
 	}
 
 	log.Info(ctx, "Account Service listening", map[string]interface{}{
-		"port": port,
+		"port":         port,
+		"metrics_port": metricsPort,
 	})
 
 	// Handle graceful shutdown
