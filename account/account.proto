@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package account;
+
+option go_package = "github.com/Ujjwaljain16/E-commerce-Backend/account/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// AccountService handles user authentication and profile management
+service AccountService {
+  // Register creates a new user account
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Login authenticates a user and returns a JWT token
+  rpc Login(LoginRequest) returns (LoginResponse);
+  
+  // GetProfile retrieves user profile information
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+  
+  // UpdateProfile updates user profile information
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  
+  // ChangePassword allows users to change their password
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  
+  // DeleteAccount soft-deletes a user account
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
+  
+  // VerifyToken validates a JWT token
+  rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
+  
+  // RefreshToken generates a new JWT token from a refresh token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+}
+
+// User represents a user account
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string phone = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  bool is_verified = 7;
+  bool is_active = 8;
+}
+
+// RegisterRequest contains user registration data
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string name = 3;
+  string phone = 4;
+}
+
+// RegisterResponse returns the created user and access token
+message RegisterResponse {
+  User user = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+}
+
+// LoginRequest contains user login credentials
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// LoginResponse returns user info and authentication tokens
+message LoginResponse {
+  User user = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+}
+
+// GetProfileRequest identifies the user by ID
+message GetProfileRequest {
+  string user_id = 1;
+}
+
+// GetProfileResponse returns user profile information
+message GetProfileResponse {
+  User user = 1;
+}
+
+// UpdateProfileRequest contains fields to update
+message UpdateProfileRequest {
+  string user_id = 1;
+  string name = 2;
+  string phone = 3;
+}
+
+// UpdateProfileResponse returns the updated user
+message UpdateProfileResponse {
+  User user = 1;
+}
+
+// ChangePasswordRequest contains password change data
+message ChangePasswordRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+// ChangePasswordResponse confirms password change
+message ChangePasswordResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// DeleteAccountRequest identifies the user to delete
+message DeleteAccountRequest {
+  string user_id = 1;
+}
+
+// DeleteAccountResponse confirms account deletion
+message DeleteAccountResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// VerifyTokenRequest contains the token to verify
+message VerifyTokenRequest {
+  string token = 1;
+}
+
+// VerifyTokenResponse returns token validation result
+message VerifyTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// RefreshTokenRequest contains the refresh token
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+// RefreshTokenResponse returns new access token
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}
