@@ -6,97 +6,26 @@ import (
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/auth"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var (
-	// ErrInvalidToken is returned when JWT token is invalid
-	ErrInvalidToken = errors.New("invalid token")
-	// ErrTokenExpired is returned when JWT token is expired
-	ErrTokenExpired = errors.New("token expired")
-)
-
-// Claims represents JWT token claims
-type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	jwt.RegisteredClaims
-}
-
 // Service implements the AccountService gRPC interface
 type Service struct {
 	pb.UnimplementedAccountServiceServer
-	repo      Repository
-	jwtSecret []byte
+	repo        Repository
+	tokenService *auth.TokenService
 }
 
 // NewService creates a new account service
 func NewService(repo Repository, jwtSecret string) *Service {
 	return &Service{
-		repo:      repo,
-		jwtSecret: []byte(jwtSecret),
+		repo:        repo,
+		tokenService: auth.NewTokenService(jwtSecret, 15*time.Minute, 7*24*time.Hour),
 	}
-}
-
-// generateTokens generates access and refresh JWT tokens
-func (s *Service) generateTokens(userID, email string) (string, string, error) {
-	// Access token (15 minutes)
-	accessClaims := &Claims{
-		UserID: userID,
-		Email:  email,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessTokenString, err := accessToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return "", "", err
-	}
-
-	// Refresh token (7 days)
-	refreshClaims := &Claims{
-		UserID: userID,
-		Email:  email,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	refreshTokenString, err := refreshToken.SignedString(s.jwtSecret)
-	if err != nil {
-		return "", "", err
-	}
-
-	return accessTokenString, refreshTokenString, nil
-}
-
-// parseToken parses and validates a JWT token
-func (s *Service) parseToken(tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return s.jwtSecret, nil
-	})
-
-	if err != nil {
-		return nil, ErrInvalidToken
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, ErrInvalidToken
-	}
-
-	if claims.ExpiresAt.Before(time.Now()) {
-		return nil, ErrTokenExpired
-	}
-
-	return claims, nil
 }
 
 // Register creates a new user account
@@ -115,8 +44,8 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		return nil, status.Error(codes.Internal, "failed to create account")
 	}
 
-	// Generate tokens
-	accessToken, refreshToken, err := s.generateTokens(account.ID, account.Email)
+	// Generate tokens using auth package
+	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, "USER")
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -152,8 +81,8 @@ func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginRes
 		return nil, status.Error(codes.Internal, "failed to verify credentials")
 	}
 
-	// Generate tokens
-	accessToken, refreshToken, err := s.generateTokens(account.ID, account.Email)
+	// Generate tokens using auth package
+	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, "USER")
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -295,7 +224,7 @@ func (s *Service) VerifyToken(ctx context.Context, req *pb.VerifyTokenRequest) (
 		return nil, status.Error(codes.InvalidArgument, "token is required")
 	}
 
-	claims, err := s.parseToken(req.Token)
+	claims, err := s.tokenService.ValidateToken(req.Token)
 	if err != nil {
 		return &pb.VerifyTokenResponse{
 			Valid: false,
@@ -315,16 +244,16 @@ func (s *Service) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest)
 		return nil, status.Error(codes.InvalidArgument, "refresh_token is required")
 	}
 
-	claims, err := s.parseToken(req.RefreshToken)
+	claims, err := s.tokenService.ValidateToken(req.RefreshToken)
 	if err != nil {
-		if errors.Is(err, ErrTokenExpired) {
+		if errors.Is(err, auth.ErrTokenExpired) {
 			return nil, status.Error(codes.Unauthenticated, "refresh token expired")
 		}
 		return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
 	}
 
-	// Generate new tokens
-	accessToken, refreshToken, err := s.generateTokens(claims.UserID, claims.Email)
+	// Generate new tokens using auth package
+	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(claims.UserID, claims.Email, claims.Role)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
