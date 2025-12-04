@@ -22,17 +22,17 @@ We're building this **exactly** like you would at Google, Amazon, or Netflix:
 
 ## 📅 Week 1: Foundation & Shared Infrastructure
 
-### Issue #1: Project Structure & Shared Packages
-**Branch**: `feature/1-project-foundation`  
+### ✅ Issue #1: Project Structure & Shared Packages
+**Branch**: `feature/1-project-foundation` - **MERGED (PR #1)**  
 **Estimated**: 1 day
 
 **Tasks**:
-- [ ] Create directory structure for all services
-- [ ] Set up `pkg/logger` - Structured JSON logging
-- [ ] Set up `pkg/metrics` - Prometheus instrumentation
-- [ ] Create Makefile with common commands
-- [ ] Add golangci-lint configuration
-- [ ] Set up GitHub Actions CI workflow
+- [x] Create directory structure for all services
+- [x] Set up `pkg/logger` - Structured JSON logging
+- [x] Set up `pkg/metrics` - Prometheus instrumentation
+- [x] Create Makefile with common commands
+- [x] Add golangci-lint configuration
+- [x] Set up GitHub Actions CI workflow
 
 **Commits**:
 ```
@@ -48,15 +48,15 @@ docs: add development setup guide
 
 ---
 
-### Issue #2: Account Service - Proto Definition
-**Branch**: `feature/2-account-proto`  
+### ✅ Issue #2: Account Service - Proto Definition
+**Branch**: `feature/2-account-proto` - **MERGED (PR #2)**  
 **Estimated**: 2 hours
 
 **Tasks**:
-- [ ] Create `account/account.proto` with basic CRUD
-- [ ] Generate protobuf Go code
-- [ ] Add proto generation to Makefile
-- [ ] Document proto file structure
+- [x] Create `account/account.proto` with 8 RPC methods
+- [x] Generate protobuf Go code
+- [x] Add proto generation to Makefile
+- [x] Document proto file structure
 
 **Commits**:
 ```
@@ -67,16 +67,16 @@ docs: document protobuf schema design
 
 ---
 
-### Issue #3: Account Service - Database & Repository
-**Branch**: `feature/3-account-repository`  
+### ✅ Issue #3: Account Service - Database & Repository
+**Branch**: `feature/3-account-repository` - **MERGED (PR #3)**  
 **Estimated**: 3 hours
 
 **Tasks**:
-- [ ] Create PostgreSQL schema (migrations/001_init.sql)
-- [ ] Implement Repository interface
-- [ ] Implement PostgreSQL repository
-- [ ] Add database connection pooling
-- [ ] Write repository unit tests
+- [x] Create PostgreSQL schema with migrations
+- [x] Implement Repository interface (7 methods)
+- [x] Implement PostgreSQL repository with bcrypt
+- [x] Add database connection pooling
+- [x] Write repository unit tests
 
 **Commits**:
 ```
@@ -87,15 +87,16 @@ test(account): add repository unit tests
 
 ---
 
-### Issue #4: Account Service - Business Logic
-**Branch**: `feature/4-account-service`  
+### ✅ Issue #4: Account Service - Implementation
+**Branch**: `feature/4-account-service` - **MERGED (PR #4, #5)**  
 **Estimated**: 4 hours
 
 **Tasks**:
-- [ ] Implement Service interface
-- [ ] Implement CRUD operations
-- [ ] Add input validation
-- [ ] Write service unit tests (>90% coverage)
+- [x] Implement Service with all 8 gRPC methods
+- [x] Implement JWT token generation (access + refresh)
+- [x] Add password hashing with bcrypt
+- [x] Implement authentication (Register, Login)
+- [x] Add input validation
 
 **Commits**:
 ```
@@ -106,16 +107,17 @@ test(account): add service unit tests with mocks
 
 ---
 
-### Issue #5: Account Service - gRPC Server
-**Branch**: `feature/5-account-grpc`  
+### ✅ Issue #5: Account Service - Docker & Testing
+**Branch**: `feature/5-docker-compose-setup` - **MERGED (PR #6)**  
 **Estimated**: 3 hours
 
 **Tasks**:
-- [ ] Implement gRPC server
-- [ ] Add health check endpoint
-- [ ] Add graceful shutdown
-- [ ] Instrument with Prometheus metrics
-- [ ] Add structured logging
+- [x] Create Dockerfile (multi-stage build)
+- [x] Create docker-compose.yaml for local dev
+- [x] Add gRPC server with graceful shutdown
+- [x] Add structured logging with context
+- [x] Test all 8 endpoints manually
+- [x] Organize test files in tests/manual/
 
 **Commits**:
 ```
@@ -127,81 +129,29 @@ feat(account): add structured request logging
 
 ---
 
-### Issue #6: Account Service - Docker & Testing
-**Branch**: `feature/6-account-docker`  
-**Estimated**: 3 hours
-
-**Tasks**:
-- [ ] Create Dockerfile (multi-stage build)
-- [ ] Create docker-compose.yaml for local dev
-- [ ] Add integration tests with testcontainers
-- [ ] Update README with running instructions
-
-**Commits**:
-```
-build(account): add multi-stage Dockerfile
-build: add docker-compose for local development
-test(account): add integration tests
-docs: add local development guide
-```
-
-**PR #1**: Merge `feature/6-account-docker` → `main`  
-**Result**: Working Account service with tests and Docker
-
----
-
-## 📅 Week 2: Authentication & JWT
-
-### Issue #7: JWT Authentication Package
-**Branch**: `feature/7-jwt-auth`  
+### 🔄 Issue #6: Account Service Enhancements
+**Branch**: `feature/6-account-enhancements`  
 **Estimated**: 4 hours
 
 **Tasks**:
-- [ ] Create `pkg/auth/jwt.go`
-- [ ] Implement token generation (access + refresh)
-- [ ] Implement token validation
-- [ ] Add comprehensive unit tests
-- [ ] Document JWT configuration
+- [ ] Extract JWT to `pkg/auth` package
+- [ ] Add gRPC health check endpoint
+- [ ] Add Prometheus metrics instrumentation
+- [ ] Add role-based access control (USER/ADMIN roles)
+- [ ] Write automated integration tests
+- [ ] Add unit tests for service layer
 
 **Commits**:
 ```
-feat(auth): implement JWT token service
-feat(auth): add access and refresh token generation
-feat(auth): add token validation
-test(auth): add comprehensive JWT tests
-docs(auth): document JWT configuration
+feat(auth): extract JWT to pkg/auth package
+feat(account): add gRPC health check endpoint
+feat(account): add Prometheus metrics
+feat(account): add RBAC with USER/ADMIN roles
+test(account): add integration tests with testcontainers
+test(account): add service unit tests
 ```
 
----
-
-### Issue #8: Account Service - Authentication
-**Branch**: `feature/8-account-auth`  
-**Estimated**: 6 hours
-
-**Tasks**:
-- [ ] Update proto with Register, Login, ValidateToken
-- [ ] Add email and password fields to schema
-- [ ] Implement password hashing (bcrypt)
-- [ ] Implement Register method
-- [ ] Implement Login method
-- [ ] Implement ValidateToken method
-- [ ] Add role-based access control (USER/ADMIN)
-- [ ] Write authentication tests
-
-**Commits**:
-```
-feat(account): add authentication proto methods
-feat(account): add email and password to schema
-feat(account): implement user registration
-feat(account): implement login with JWT
-feat(account): add password hashing with bcrypt
-feat(account): implement token validation
-feat(account): add role-based access control
-test(account): add authentication flow tests
-```
-
-**PR #2**: Merge `feature/8-account-auth` → `main`  
-**Result**: Complete authentication system with JWT
+**Result**: Production-ready Account service with monitoring and RBAC
 
 ---
 
