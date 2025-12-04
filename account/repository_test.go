@@ -16,7 +16,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	// Skip if no database URL is provided
 	dbURL := "postgres://postgres:postgres@localhost:5432/ecommerce_test?sslmode=disable"
-	
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		t.Skip("Skipping integration test: database not available")
