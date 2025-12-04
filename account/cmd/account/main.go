@@ -14,6 +14,8 @@ import (
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -55,6 +57,12 @@ func main() {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
 	pb.RegisterAccountServiceServer(grpcServer, service)
+
+	// Register health check service
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	healthServer.SetServingStatus("account.AccountService", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// Enable reflection for grpcurl/grpcui
 	reflection.Register(grpcServer)
