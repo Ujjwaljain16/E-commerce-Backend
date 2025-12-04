@@ -8,10 +8,7 @@ help:
 ## proto-gen: Generate protobuf code for all services
 proto-gen:
 	@echo "Generating protobuf files..."
-	cd account && protoc --go_out=./pb --go-grpc_out=./pb account.proto
-	cd catalog && protoc --go_out=./pb --go-grpc_out=./pb catalog.proto
-	cd order && protoc --go_out=./pb --go-grpc_out=./pb order.proto
-	cd payment && protoc --go_out=./pb --go-grpc_out=./pb payment.proto
+	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative account/account.proto
 	@echo "✅ Protobuf generation complete"
 
 ## test: Run all unit tests
