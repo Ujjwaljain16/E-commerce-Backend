@@ -1,5 +1,8 @@
 # Account Service Manual Testing Guide
 
+## Test Files Location
+All test files are located in `tests/manual/` directory.
+
 ## Prerequisites
 - Docker and Docker Compose installed
 - grpcurl installed (for testing gRPC endpoints)
@@ -32,6 +35,10 @@ grpcurl -plaintext -d '{
   "name": "Test User",
   "phone": "1234567890"
 }' localhost:50051 account.AccountService/Register
+
+# Or using test file:
+cd tests/manual
+cmd /c 'type test-register.json | grpcurl -plaintext -d @ localhost:50051 account.AccountService/Register'
 ```
 
 **Expected Response:**
