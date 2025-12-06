@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package catalog;
+
+option go_package = "github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// Product represents a product in the catalog
+message Product {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    double price = 4;
+    string sku = 5;
+    int32 stock = 6;
+    repeated string images = 7;
+    string category = 8;
+    google.protobuf.Timestamp created_at = 9;
+    google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateProduct
+message CreateProductRequest {
+    string name = 1;
+    string description = 2;
+    double price = 3;
+    string sku = 4;
+    int32 stock = 5;
+    repeated string images = 6;
+    string category = 7;
+}
+
+message CreateProductResponse {
+    Product product = 1;
+}
+
+// GetProduct
+message GetProductRequest {
+    string id = 1;
+}
+
+message GetProductResponse {
+    Product product = 1;
+}
+
+// ListProducts
+message ListProductsRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string category = 3;
+}
+
+message ListProductsResponse {
+    repeated Product products = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// UpdateProduct
+message UpdateProductRequest {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    double price = 4;
+    int32 stock = 5;
+    repeated string images = 6;
+    string category = 7;
+}
+
+message UpdateProductResponse {
+    Product product = 1;
+}
+
+// DeleteProduct
+message DeleteProductRequest {
+    string id = 1;
+}
+
+message DeleteProductResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// SearchProducts
+message SearchProductsRequest {
+    string query = 1;
+    int32 page = 2;
+    int32 page_size = 3;
+}
+
+message SearchProductsResponse {
+    repeated Product products = 1;
+    int32 total = 2;
+}
+
+service CatalogService {
+    rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse);
+    rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+    rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+    rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
+    rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse);
+    rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse);
+}
