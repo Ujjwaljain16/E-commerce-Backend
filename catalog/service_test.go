@@ -14,14 +14,14 @@ import (
 
 // MockRepository is a mock implementation of Repository for testing
 type MockRepository struct {
-	CreateFunc    func(ctx context.Context, product *Product) (*Product, error)
-	GetByIDFunc   func(ctx context.Context, id string) (*Product, error)
-	GetBySKUFunc  func(ctx context.Context, sku string) (*Product, error)
-	ListFunc      func(ctx context.Context, page, pageSize int32, category string) ([]*Product, int32, error)
-	UpdateFunc    func(ctx context.Context, product *Product) (*Product, error)
-	DeleteFunc    func(ctx context.Context, id string) error
-	SearchFunc    func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
-	CloseFunc     func() error
+	CreateFunc   func(ctx context.Context, product *Product) (*Product, error)
+	GetByIDFunc  func(ctx context.Context, id string) (*Product, error)
+	GetBySKUFunc func(ctx context.Context, sku string) (*Product, error)
+	ListFunc     func(ctx context.Context, page, pageSize int32, category string) ([]*Product, int32, error)
+	UpdateFunc   func(ctx context.Context, product *Product) (*Product, error)
+	DeleteFunc   func(ctx context.Context, id string) error
+	SearchFunc   func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
+	CloseFunc    func() error
 }
 
 func (m *MockRepository) Create(ctx context.Context, product *Product) (*Product, error) {
@@ -80,7 +80,7 @@ func (m *MockRepository) Close() error {
 	return nil
 }
 
-func setupService(t *testing.T, repo Repository) *Service {
+func setupService(repo Repository) *Service {
 	log := logger.New("catalog-test")
 	return NewService(repo, log)
 }
@@ -98,7 +98,7 @@ func TestCreateProduct_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -132,7 +132,7 @@ func TestCreateProduct_Success(t *testing.T) {
 
 func TestCreateProduct_MissingName(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -160,7 +160,7 @@ func TestCreateProduct_MissingName(t *testing.T) {
 
 func TestCreateProduct_MissingSKU(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -188,7 +188,7 @@ func TestCreateProduct_MissingSKU(t *testing.T) {
 
 func TestCreateProduct_InvalidPrice(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -212,7 +212,7 @@ func TestCreateProduct_InvalidPrice(t *testing.T) {
 
 func TestCreateProduct_NegativeStock(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -241,7 +241,7 @@ func TestCreateProduct_DuplicateSKU(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
@@ -281,7 +281,7 @@ func TestGetProduct_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.GetProductRequest{Id: "test-id"}
@@ -302,7 +302,7 @@ func TestGetProduct_Success(t *testing.T) {
 
 func TestGetProduct_MissingID(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.GetProductRequest{Id: ""}
@@ -325,7 +325,7 @@ func TestGetProduct_NotFound(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.GetProductRequest{Id: "non-existent"}
@@ -367,7 +367,7 @@ func TestListProducts_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.ListProductsRequest{
@@ -404,7 +404,7 @@ func TestListProducts_WithCategory(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.ListProductsRequest{
@@ -435,7 +435,7 @@ func TestUpdateProduct_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.UpdateProductRequest{
@@ -465,7 +465,7 @@ func TestUpdateProduct_Success(t *testing.T) {
 
 func TestUpdateProduct_MissingID(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.UpdateProductRequest{
@@ -494,7 +494,7 @@ func TestUpdateProduct_NotFound(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.UpdateProductRequest{
@@ -523,7 +523,7 @@ func TestDeleteProduct_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.DeleteProductRequest{Id: "test-id"}
@@ -544,7 +544,7 @@ func TestDeleteProduct_Success(t *testing.T) {
 
 func TestDeleteProduct_MissingID(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.DeleteProductRequest{Id: ""}
@@ -567,7 +567,7 @@ func TestDeleteProduct_NotFound(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.DeleteProductRequest{Id: "non-existent"}
@@ -600,7 +600,7 @@ func TestSearchProducts_Success(t *testing.T) {
 		},
 	}
 
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.SearchProductsRequest{
@@ -630,7 +630,7 @@ func TestSearchProducts_Success(t *testing.T) {
 
 func TestSearchProducts_MissingQuery(t *testing.T) {
 	mockRepo := &MockRepository{}
-	service := setupService(t, mockRepo)
+	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.SearchProductsRequest{
