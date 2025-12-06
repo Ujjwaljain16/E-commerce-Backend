@@ -10,8 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Ujjwaljain16/E-commerce-Backend/account"
-	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/catalog"
+	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/metrics"
 	_ "github.com/lib/pq"
@@ -26,14 +26,13 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize logger
-	log := logger.New("account-service")
-	log.Info(ctx, "Starting Account Service", nil)
+	log := logger.New("catalog-service")
+	log.Info(ctx, "Starting Catalog Service", nil)
 
 	// Get configuration from environment
-	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ecommerce?sslmode=disable")
-	jwtSecret := getEnv("JWT_SECRET", "your-secret-key-change-in-production")
-	port := getEnv("PORT", "50051")
-	metricsPort := getEnv("METRICS_PORT", "9090")
+	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/ecommerce?sslmode=disable")
+	port := getEnv("PORT", "50052")
+	metricsPort := getEnv("METRICS_PORT", "9091")
 
 	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
@@ -55,19 +54,19 @@ func main() {
 	log.Info(ctx, "Connected to database", nil)
 
 	// Create repository and service
-	repo := account.NewRepository(db)
-	service := account.NewService(repo, jwtSecret)
+	repo := catalog.NewPostgresRepository(db, log)
+	service := catalog.NewService(repo, log)
 
 	// Create gRPC server with metrics interceptor
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor("account-service")),
+		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor("catalog-service")),
 	)
-	pb.RegisterAccountServiceServer(grpcServer, service)
+	pb.RegisterCatalogServiceServer(grpcServer, service)
 
 	// Register health check service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-	healthServer.SetServingStatus("account.AccountService", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("catalog.CatalogService", grpc_health_v1.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// Enable reflection for grpcurl/grpcui
@@ -97,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info(ctx, "Account Service listening", map[string]interface{}{
+	log.Info(ctx, "Catalog Service listening", map[string]interface{}{
 		"port":         port,
 		"metrics_port": metricsPort,
 	})

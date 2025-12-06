@@ -43,7 +43,7 @@ func TestRepository_Create(t *testing.T) {
 	repo := NewRepository(db)
 	ctx := context.Background()
 
-	account, err := repo.Create(ctx, "test@example.com", "password123", "Test User", "1234567890")
+	account, err := repo.Create(ctx, "test@example.com", "password123", "Test User", "1234567890", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -70,13 +70,13 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 	ctx := context.Background()
 
 	// Create first account
-	_, err := repo.Create(ctx, "duplicate@example.com", "password123", "User 1", "1111111111")
+	_, err := repo.Create(ctx, "duplicate@example.com", "password123", "User 1", "1111111111", "USER")
 	if err != nil {
 		t.Fatalf("First create failed: %v", err)
 	}
 
 	// Try to create with same email
-	_, err = repo.Create(ctx, "duplicate@example.com", "password456", "User 2", "2222222222")
+	_, err = repo.Create(ctx, "duplicate@example.com", "password456", "User 2", "2222222222", "USER")
 	if err != ErrEmailAlreadyExists {
 		t.Errorf("Expected ErrEmailAlreadyExists, got %v", err)
 	}
@@ -90,7 +90,7 @@ func TestRepository_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	// Create account
-	created, err := repo.Create(ctx, "getbyid@example.com", "password123", "Get By ID", "3333333333")
+	created, err := repo.Create(ctx, "getbyid@example.com", "password123", "Get By ID", "3333333333", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestRepository_GetByEmail(t *testing.T) {
 	ctx := context.Background()
 
 	// Create account
-	_, err := repo.Create(ctx, "getbyemail@example.com", "password123", "Get By Email", "4444444444")
+	_, err := repo.Create(ctx, "getbyemail@example.com", "password123", "Get By Email", "4444444444", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRepository_Update(t *testing.T) {
 	ctx := context.Background()
 
 	// Create account
-	created, err := repo.Create(ctx, "update@example.com", "password123", "Original Name", "5555555555")
+	created, err := repo.Create(ctx, "update@example.com", "password123", "Original Name", "5555555555", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestRepository_VerifyPassword(t *testing.T) {
 	ctx := context.Background()
 
 	// Create account
-	_, err := repo.Create(ctx, "verify@example.com", "correctpassword", "Verify User", "7777777777")
+	_, err := repo.Create(ctx, "verify@example.com", "correctpassword", "Verify User", "7777777777", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRepository_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	// Create account
-	created, err := repo.Create(ctx, "delete@example.com", "password123", "Delete User", "8888888888")
+	created, err := repo.Create(ctx, "delete@example.com", "password123", "Delete User", "8888888888", "USER")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

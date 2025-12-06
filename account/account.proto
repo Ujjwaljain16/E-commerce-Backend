@@ -43,6 +43,7 @@ message User {
   google.protobuf.Timestamp updated_at = 6;
   bool is_verified = 7;
   bool is_active = 8;
+  string role = 9; // USER or ADMIN
 }
 
 // RegisterRequest contains user registration data

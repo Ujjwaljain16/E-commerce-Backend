@@ -26,6 +26,7 @@ type Account struct {
 	PasswordHash string
 	Name         string
 	Phone        string
+	Role         string
 	IsVerified   bool
 	IsActive     bool
 	CreatedAt    time.Time
@@ -34,7 +35,7 @@ type Account struct {
 
 // Repository defines the interface for account data operations
 type Repository interface {
-	Create(ctx context.Context, email, password, name, phone string) (*Account, error)
+	Create(ctx context.Context, email, password, name, phone, role string) (*Account, error)
 	GetByID(ctx context.Context, id string) (*Account, error)
 	GetByEmail(ctx context.Context, email string) (*Account, error)
 	Update(ctx context.Context, id, name, phone string) (*Account, error)
@@ -54,11 +55,16 @@ func NewRepository(db *sql.DB) Repository {
 }
 
 // Create creates a new account with hashed password
-func (r *repository) Create(ctx context.Context, email, password, name, phone string) (*Account, error) {
+func (r *repository) Create(ctx context.Context, email, password, name, phone, role string) (*Account, error) {
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
+	}
+
+	// Default to USER role if not specified
+	if role == "" {
+		role = "USER"
 	}
 
 	account := &Account{
@@ -67,6 +73,7 @@ func (r *repository) Create(ctx context.Context, email, password, name, phone st
 		PasswordHash: string(hashedPassword),
 		Name:         name,
 		Phone:        phone,
+		Role:         role,
 		IsVerified:   false,
 		IsActive:     true,
 		CreatedAt:    time.Now(),
@@ -74,8 +81,8 @@ func (r *repository) Create(ctx context.Context, email, password, name, phone st
 	}
 
 	query := `
-		INSERT INTO accounts (id, email, password_hash, name, phone, is_verified, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO accounts (id, email, password_hash, name, phone, role, is_verified, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
@@ -84,6 +91,7 @@ func (r *repository) Create(ctx context.Context, email, password, name, phone st
 		account.PasswordHash,
 		account.Name,
 		account.Phone,
+		account.Role,
 		account.IsVerified,
 		account.IsActive,
 		account.CreatedAt,
@@ -106,7 +114,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Account, error) {
 	account := &Account{}
 
 	query := `
-		SELECT id, email, password_hash, name, phone, is_verified, is_active, created_at, updated_at
+		SELECT id, email, password_hash, name, phone, role, is_verified, is_active, created_at, updated_at
 		FROM accounts
 		WHERE id = $1 AND is_active = TRUE
 	`
@@ -117,6 +125,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Account, error) {
 		&account.PasswordHash,
 		&account.Name,
 		&account.Phone,
+		&account.Role,
 		&account.IsVerified,
 		&account.IsActive,
 		&account.CreatedAt,
@@ -138,7 +147,7 @@ func (r *repository) GetByEmail(ctx context.Context, email string) (*Account, er
 	account := &Account{}
 
 	query := `
-		SELECT id, email, password_hash, name, phone, is_verified, is_active, created_at, updated_at
+		SELECT id, email, password_hash, name, phone, role, is_verified, is_active, created_at, updated_at
 		FROM accounts
 		WHERE email = $1 AND is_active = TRUE
 	`
@@ -149,6 +158,7 @@ func (r *repository) GetByEmail(ctx context.Context, email string) (*Account, er
 		&account.PasswordHash,
 		&account.Name,
 		&account.Phone,
+		&account.Role,
 		&account.IsVerified,
 		&account.IsActive,
 		&account.CreatedAt,
@@ -171,7 +181,7 @@ func (r *repository) Update(ctx context.Context, id, name, phone string) (*Accou
 		UPDATE accounts
 		SET name = $2, phone = $3, updated_at = $4
 		WHERE id = $1 AND is_active = TRUE
-		RETURNING id, email, password_hash, name, phone, is_verified, is_active, created_at, updated_at
+		RETURNING id, email, password_hash, name, phone, role, is_verified, is_active, created_at, updated_at
 	`
 
 	account := &Account{}
@@ -181,6 +191,7 @@ func (r *repository) Update(ctx context.Context, id, name, phone string) (*Accou
 		&account.PasswordHash,
 		&account.Name,
 		&account.Phone,
+		&account.Role,
 		&account.IsVerified,
 		&account.IsActive,
 		&account.CreatedAt,
