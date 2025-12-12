@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "github.com/Ujjwaljain16/E-commerce-Backend/order/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// OrderStatus represents the current state of an order
+enum OrderStatus {
+    ORDER_STATUS_UNSPECIFIED = 0;
+    PENDING = 1;      // Order created, awaiting confirmation
+    CONFIRMED = 2;    // Order confirmed by system
+    PROCESSING = 3;   // Order being prepared/processed
+    SHIPPED = 4;      // Order has been shipped
+    DELIVERED = 5;    // Order delivered to customer
+    CANCELLED = 6;    // Order cancelled
+    REFUNDED = 7;     // Order refunded
+}
+
+// OrderItem represents a single item in an order
+message OrderItem {
+    string id = 1;
+    string order_id = 2;
+    string product_id = 3;
+    string product_name = 4;
+    int32 quantity = 5;
+    double price = 6;
+    double subtotal = 7;
+}
+
+// Order represents a customer order
+message Order {
+    string id = 1;
+    string user_id = 2;
+    OrderStatus status = 3;
+    repeated OrderItem items = 4;
+    double total_amount = 5;
+    string shipping_address = 6;
+    string billing_address = 7;
+    string payment_method = 8;
+    google.protobuf.Timestamp created_at = 9;
+    google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateOrder
+message CreateOrderRequest {
+    string user_id = 1;
+    repeated OrderItemInput items = 2;
+    string shipping_address = 3;
+    string billing_address = 4;
+    string payment_method = 5;
+}
+
+message OrderItemInput {
+    string product_id = 1;
+    string product_name = 2;
+    int32 quantity = 3;
+    double price = 4;
+}
+
+message CreateOrderResponse {
+    Order order = 1;
+}
+
+// GetOrder
+message GetOrderRequest {
+    string id = 1;
+}
+
+message GetOrderResponse {
+    Order order = 1;
+}
+
+// ListOrders
+message ListOrdersRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string user_id = 3; // Optional: filter by user
+    OrderStatus status = 4; // Optional: filter by status
+}
+
+message ListOrdersResponse {
+    repeated Order orders = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// UpdateOrderStatus
+message UpdateOrderStatusRequest {
+    string id = 1;
+    OrderStatus status = 2;
+}
+
+message UpdateOrderStatusResponse {
+    Order order = 1;
+}
+
+// CancelOrder
+message CancelOrderRequest {
+    string id = 1;
+    string reason = 2; // Optional cancellation reason
+}
+
+message CancelOrderResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// GetOrdersByUser
+message GetOrdersByUserRequest {
+    string user_id = 1;
+    int32 page = 2;
+    int32 page_size = 3;
+}
+
+message GetOrdersByUserResponse {
+    repeated Order orders = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// OrderService handles order management operations
+service OrderService {
+    // CreateOrder creates a new order with items
+    rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+    
+    // GetOrder retrieves an order by ID
+    rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+    
+    // ListOrders retrieves orders with pagination and optional filters
+    rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+    
+    // UpdateOrderStatus updates the status of an order
+    rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
+    
+    // CancelOrder cancels an order
+    rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+    
+    // GetOrdersByUser retrieves all orders for a specific user
+    rpc GetOrdersByUser(GetOrdersByUserRequest) returns (GetOrdersByUserResponse);
+}
