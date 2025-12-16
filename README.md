@@ -1,3 +1,5 @@
+``WORK IN PROGRESS ``
+
 # E-Commerce Microservices Platform
 
 A production-grade, distributed e-commerce backend system built with Go, gRPC, Kafka, GraphQL, and Kubernetes.
