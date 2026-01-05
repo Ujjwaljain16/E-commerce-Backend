@@ -9,6 +9,8 @@ help:
 proto-gen:
 	@echo "Generating protobuf files..."
 	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative account/account.proto
+	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative catalog/catalog.proto
+	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative order/order.proto
 	@echo "✅ Protobuf generation complete"
 
 ## test: Run all unit tests
