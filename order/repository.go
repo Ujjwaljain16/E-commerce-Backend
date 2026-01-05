@@ -23,13 +23,13 @@ var (
 type OrderStatus int
 
 const (
-	OrderStatusPending OrderStatus = 1
-	OrderStatusConfirmed OrderStatus = 2
+	OrderStatusPending    OrderStatus = 1
+	OrderStatusConfirmed  OrderStatus = 2
 	OrderStatusProcessing OrderStatus = 3
-	OrderStatusShipped OrderStatus = 4
-	OrderStatusDelivered OrderStatus = 5
-	OrderStatusCancelled OrderStatus = 6
-	OrderStatusRefunded OrderStatus = 7
+	OrderStatusShipped    OrderStatus = 4
+	OrderStatusDelivered  OrderStatus = 5
+	OrderStatusCancelled  OrderStatus = 6
+	OrderStatusRefunded   OrderStatus = 7
 )
 
 // OrderItem represents an item in an order

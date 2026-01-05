@@ -400,7 +400,7 @@ func TestTransactionRollback(t *testing.T) {
 	// Create order with invalid data that should cause rollback
 	// We'll test by closing the connection mid-transaction
 	order := createTestOrder("650e8400-e29b-41d4-a716-446655440000")
-	
+
 	// This should succeed normally
 	createdOrder, err := repo.Create(ctx, order)
 	require.NoError(t, err)
