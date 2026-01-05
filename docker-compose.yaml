@@ -12,6 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./account/migrations:/docker-entrypoint-initdb.d/account
       - ./catalog/migrations:/docker-entrypoint-initdb.d/catalog
+      - ./order/migrations:/docker-entrypoint-initdb.d/order
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -48,6 +49,23 @@ services:
     ports:
       - "50052:50052"
       - "9091:9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  order-service:
+    build:
+      context: .
+      dockerfile: order/Dockerfile
+    container_name: order-service
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ecommerce?sslmode=disable
+      PORT: 50053
+      METRICS_PORT: 9092
+    ports:
+      - "50053:50053"
+      - "9092:9092"
     depends_on:
       postgres:
         condition: service_healthy
