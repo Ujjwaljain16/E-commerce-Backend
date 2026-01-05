@@ -10,9 +10,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./account/migrations:/docker-entrypoint-initdb.d/account
-      - ./catalog/migrations:/docker-entrypoint-initdb.d/catalog
-      - ./order/migrations:/docker-entrypoint-initdb.d/order
+      - ./account/migrations/001_create_accounts_table.up.sql:/docker-entrypoint-initdb.d/1_account_001.sql
+      - ./account/migrations/002_add_role_column.up.sql:/docker-entrypoint-initdb.d/1_account_002.sql
+      - ./catalog/migrations/001_create_products_table.up.sql:/docker-entrypoint-initdb.d/2_catalog_001.sql
+      - ./order/migrations/001_create_orders_table.up.sql:/docker-entrypoint-initdb.d/3_order_001.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
