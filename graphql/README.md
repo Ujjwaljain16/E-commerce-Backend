@@ -60,7 +60,8 @@ docker run -p 8000:8000 -e JWT_SECRET=... -e ACCOUNT_SERVICE_ADDR=account-servic
 | `TRUST_PROXY` | `false` | Use the last `X-Forwarded-For` hop as the client IP. Only enable behind a proxy you control. |
 | `COMPLEXITY_LIMIT` | `200` | Max query complexity |
 | `CORS_ALLOWED_ORIGINS` | empty | Comma-separated origins; empty sends no CORS headers |
-| `PLAYGROUND_ENABLED` | `false` | Enables `/playground` and schema introspection |
+| `PLAYGROUND_ENABLED` | `false` | Enables `/playground`, `/dev/checkout` and schema introspection |
+| `RAZORPAY_KEY_ID` | empty | Public Razorpay key returned in `Payment.checkout`. Never set the key secret here. |
 
 ## Authentication
 
@@ -129,6 +130,39 @@ query {
 }
 ```
 
+### Paying with Razorpay
+
+When the payment service runs with `PAYMENT_PROVIDER=razorpay`, a new order's payment stays `PENDING` until the customer pays in [Razorpay Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/):
+
+1. `createOrder` as usual, then poll `paymentForOrder` until `checkout` is set (the payment service creates the Razorpay order a moment after `order.created`):
+
+   ```graphql
+   query {
+     paymentForOrder(orderId: "o-456") {
+       status provider providerOrderId
+       checkout { keyId orderId amountCents currency }
+     }
+   }
+   ```
+
+2. Open Checkout with those values (`key: keyId`, `order_id: orderId`, `amount: amountCents`, `currency`). Pass `retry: { enabled: false }`: a failed attempt fails the payment and cancels the order, so a retry in the same window would only be refunded.
+
+3. Send what Checkout's `handler` receives to `confirmPayment`. The signature is checked against the stored Razorpay order, so it can't be replayed for another order:
+
+   ```graphql
+   mutation {
+     confirmPayment(orderId: "o-456", razorpayPaymentId: "pay_29QQoUBi66xm2f", razorpaySignature: "9ef4dffb...") {
+       status providerRef
+     }
+   }
+   ```
+
+   It returns the payment (`SUCCEEDED`), and the order becomes `CONFIRMED` shortly after. A bad signature is `BAD_USER_INPUT`; another user's order is `NOT_FOUND`.
+
+The `payment.captured` / `payment.failed` webhooks reach the same state even if the client never calls `confirmPayment`. A checkout nobody pays fails after `PAYMENT_TIMEOUT` (30m) and the order is cancelled.
+
+With `PLAYGROUND_ENABLED=true`, http://localhost:8000/dev/checkout runs this whole flow in the browser (log in, order a product ID, pay in Checkout with test keys, watch the order status). It is a development aid only.
+
 Admin:
 
 ```graphql
@@ -167,6 +201,8 @@ Every error carries `extensions.code`:
 |---|---|
 | `/graphql` | GraphQL API |
 | `/playground` | GraphQL playground (only with `PLAYGROUND_ENABLED=true`) |
+| `/dev/checkout` | Razorpay test checkout page (only with `PLAYGROUND_ENABLED=true`) |
+| `POST /webhooks/razorpay` | Razorpay webhooks. Forwards the raw body (max 256 KB) and `X-Razorpay-Signature` to the payment service: 200 when applied or ignored, 400 for a bad signature, 404 if Razorpay is not enabled, 503 if the payment service failed (Razorpay retries). Not rate limited and needs no token; the signature is the authentication. |
 | `/healthz` | Liveness, always 200 |
 | `/readyz` | 200 unless a backend connection is failing |
 | `/metrics` | Prometheus metrics |
@@ -177,4 +213,4 @@ Every error carries `extensions.code`:
 go test -short ./graphql/...
 ```
 
-Resolver tests run against fake gRPC clients through the real gqlgen handler; middleware tests cover auth, rate limiting, body limits and CORS.
+Resolver tests run against fake gRPC clients through the real gqlgen handler; middleware tests cover auth, rate limiting, body limits and CORS; webhook tests check the raw body is forwarded and the route bypasses the rate limiter.

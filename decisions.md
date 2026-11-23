@@ -101,8 +101,7 @@ because invalidation would be broad for little gain at this scale.
 ## 9. Mock payment provider behind an interface
 
 **Decision.** `payment.Processor` has a mock implementation that declines `card_declined` and amounts
-over $10,000 (1,000,000 cents). A real provider (e.g. Stripe) is a new implementation of the same interface, using our
-idempotency key as the provider's idempotency key.
+over $10,000 (1,000,000 cents). It stays the default; Razorpay (see 15) is the real provider.
 
 ## 10. gRPC between services, GraphQL at the edge
 
@@ -116,7 +115,7 @@ Redis limiter is the upgrade path if that matters.
 
 ## 11. Money as integer cents
 
-**Decision.** Every amount is an `int64` number of minor units (cents; the only currency is USD) end to
+**Decision.** Every amount is an `int64` number of minor units (cents for USD, paise for INR, see 15) end to
 end: proto fields are `*_cents` (`price_cents`, `unit_price_cents`, `subtotal_cents`,
 `total_amount_cents`, `amount_cents`), Kafka events carry the same names, and Postgres stores `BIGINT`
 columns with `CHECK (... >= 0)`. Order subtotals are `quantity * unit_price_cents` and the total is their
@@ -167,3 +166,42 @@ under load produced zero errors.
 - **Observability:** Prometheus metrics for gRPC/HTTP rate, errors and latency, Kafka produced/consumed/dead-lettered, and cache hit ratio; alert rules and a Grafana dashboard live in `monitoring/`. Logs are structured JSON on stdout, ready for any log collector (ELK, Loki) without coupling services to one.
 - **Kubernetes:** kustomize manifests with resource limits, restricted pod security, HPA + PDB on the hot path (gateway, catalog, order). The bundled Postgres/Kafka/Redis are single-node for dev/staging; production should use managed services.
 - **CI:** gofmt, vet, staticcheck, protobuf drift, race-enabled unit tests, testcontainers integration tests, govulncheck, image build + Trivy scan, manifest rendering. Images are pushed to GHCR only from `main`.
+
+## 15. Razorpay checkout is asynchronous
+
+**Decision.** With `PAYMENT_PROVIDER=razorpay`, `order.created` only creates a Razorpay order (our order ID
+as `receipt`) and leaves the payment `PENDING`; no event is published until the customer has paid in
+Razorpay Checkout. Three paths finish it, all guarded by `WHERE status = PENDING` and committed with
+their outbox event:
+
+- `ConfirmPayment` with the Checkout handler's `razorpay_payment_id` and `razorpay_signature`, verified
+  against the order ID we stored (never one the client sends), then cross-checked by fetching the payment.
+- The `payment.captured` / `payment.authorized` / `payment.failed` webhooks, verified with the webhook
+  secret over the raw body. The gateway forwards the bytes untouched and keeps the route out of the
+  rate limiter, since Razorpay calls from a few shared IPs.
+- An expiry sweeper fails payments still `PENDING` after `PAYMENT_TIMEOUT` (30m), so the saga cancels the
+  order and releases the stock. It asks Razorpay first, so a lost webhook does not fail a paid order.
+
+Authorized payments are captured by us, so the flow works whether or not auto-capture is on in the dashboard.
+
+**Why.** With Checkout the money moves between the customer's browser and Razorpay, not in our consumer,
+so the charge can't be synchronous. The client callback alone can't be trusted (it can be forged or never
+arrive), hence the signature; the webhook covers clients that close the tab; and the timeout guarantees
+every order leaves `PENDING` even if neither arrives.
+
+**Late capture after cancel: automatic refund.** A customer can still pay a Razorpay order after we
+cancelled it, or after it expired or a previous attempt failed. Rather than reopening a cancelled order
+(the stock may be gone), any capture that lands on a `CANCELLED` or `FAILED` payment is refunded through
+the API and the payment becomes `REFUNDED` without another event. Refunds carry `X-Refund-Idempotency`, so
+concurrent replicas or retries never refund twice. Authorized-but-uncaptured payments for closed orders are
+left alone; Razorpay returns those itself. Because a failed attempt fails the order, clients should open
+Checkout with `retry: { enabled: false }`.
+
+**INR.** Razorpay charges INR in paise, so the order service's currency is configurable (`CURRENCY`,
+default `USD`) and stored on each order. Amounts stay integer minor units everywhere and nothing is
+converted, so switching to INR means catalog prices are read as paise. Notification emails format INR as
+`₹1,234.50` with Indian digit grouping (`₹1,00,000.00`), in integer math.
+
+**Trade-off.** Orders take longer to leave `PENDING`, and failed payments only cancel promptly when the
+webhook can reach the gateway. Webhook deliveries are deduplicated by state rather than by
+`x-razorpay-event-id`, which is enough because every handler is an idempotent status transition.
