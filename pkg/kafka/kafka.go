@@ -5,6 +5,8 @@ package kafka
 import (
 	"context"
 	"errors"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,12 +103,57 @@ func NewConsumer(cfg ConsumerConfig, log *logger.Logger) *Consumer {
 			MaxWait:        500 * time.Millisecond,
 			StartOffset:    kafkago.FirstOffset,
 			CommitInterval: 0,
+			// Without this a group that joined before a topic existed never gets its partitions.
+			WatchPartitionChanges: true,
 		}),
 	}
 }
 
+// EnsureTopics creates any missing topics with the broker's default partition count and
+// replication factor, so consumers can join before the first producer writes.
+func EnsureTopics(ctx context.Context, brokers []string, topics ...string) error {
+	var d kafkago.Dialer
+	conn, err := d.DialContext(ctx, "tcp", brokers[0])
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	controller, err := conn.Controller()
+	if err != nil {
+		return err
+	}
+	cc, err := d.DialContext(ctx, "tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	cfgs := make([]kafkago.TopicConfig, len(topics))
+	for i, t := range topics {
+		cfgs[i] = kafkago.TopicConfig{Topic: t, NumPartitions: -1, ReplicationFactor: -1}
+	}
+	if err := cc.CreateTopics(cfgs...); err != nil && !errors.Is(err, kafkago.TopicAlreadyExists) {
+		return err
+	}
+	return nil
+}
+
 // Run consumes until ctx is cancelled.
 func (c *Consumer) Run(ctx context.Context, h Handler) error {
+	for attempt := 0; ; attempt++ {
+		err := EnsureTopics(ctx, c.cfg.Brokers, c.cfg.Topics...)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+		c.log.Warn(ctx, "waiting for kafka to create topics", map[string]interface{}{"error": err.Error(), "attempt": attempt})
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(2 * time.Second):
+		}
+	}
 	for {
 		msg, err := c.r.FetchMessage(ctx)
 		if err != nil {
