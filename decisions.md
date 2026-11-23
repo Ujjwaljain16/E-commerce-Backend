@@ -30,11 +30,17 @@ lets multiple replicas run the relay.
 **Why.** Writing to Postgres and Kafka separately loses events (crash between the two) or publishes
 events for rolled-back changes. The outbox makes "state changed" and "event will be published" atomic.
 
-**Trade-off.** Delivery is at-least-once, so every consumer is idempotent (see 3).
+**Trade-off.** Delivery is at-least-once, so every consumer is idempotent (see 3). Published rows are
+kept for 7 days for debugging, then deleted in batches by the relay so the tables don't grow forever.
 
 ## 3. Idempotency everywhere instead of exactly-once
 
 - Catalog: one `stock_reservations` row per order; `ReserveStock` returns the existing reservation on retry, `ReleaseStock` is a no-op once released.
+  A reservation moves `RESERVED → COMMITTED` when `order.created` arrives. If none arrives within
+  `RESERVATION_TTL` (15m) the order failed to save, so a sweeper returns the stock (`EXPIRED`). A late
+  `order.created` re-reserves if stock allows; if not it is logged loudly and skipped (the order needs
+  a human or a refund). A cancellation that overtakes `order.created` wins, because the two travel on
+  different topics and Kafka only orders within a partition.
 - Payment: `order_id` and `idempotency_key` are unique; a late `order.created` for an already-cancelled order finds a `CANCELLED` row and does nothing.
 - Order: payment results only apply to `PENDING` orders (`UPDATE ... WHERE status = PENDING`).
 - Notification: `event_id` is unique, so redelivered events never send a second email.
