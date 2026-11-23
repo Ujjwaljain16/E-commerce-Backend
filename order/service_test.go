@@ -18,7 +18,7 @@ type MockRepository struct {
 	GetByIDFunc      func(ctx context.Context, id string) (*Order, error)
 	ListFunc         func(ctx context.Context, page, pageSize int, userID string, status OrderStatus) ([]*Order, int, error)
 	UpdateStatusFunc func(ctx context.Context, id string, status OrderStatus) (*Order, error)
-	CancelFunc       func(ctx context.Context, id string) error
+	CancelFunc       func(ctx context.Context, id, reason string) (*Order, error)
 	GetByUserIDFunc  func(ctx context.Context, userID string, page, pageSize int) ([]*Order, int, error)
 	CloseFunc        func() error
 }
@@ -51,10 +51,18 @@ func (m *MockRepository) UpdateStatus(ctx context.Context, id string, status Ord
 	return nil, errors.New("not implemented")
 }
 
-func (m *MockRepository) Cancel(ctx context.Context, id string) error {
+func (m *MockRepository) Cancel(ctx context.Context, id, reason string) (*Order, error) {
 	if m.CancelFunc != nil {
-		return m.CancelFunc(ctx, id)
+		return m.CancelFunc(ctx, id, reason)
 	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ApplyPaymentResult(ctx context.Context, id string, succeeded bool, reason string) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (m *MockRepository) MarkRefunded(ctx context.Context, id string) error {
 	return errors.New("not implemented")
 }
 
@@ -74,7 +82,7 @@ func (m *MockRepository) Close() error {
 
 func setupService(repo Repository) *Service {
 	log := logger.New("order-test")
-	return NewService(repo, log)
+	return NewService(repo, &fakeInventory{}, log)
 }
 
 func TestCreateOrder_Success(t *testing.T) {
@@ -91,7 +99,7 @@ func TestCreateOrder_Success(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateOrderRequest{
-		UserId: "user-123",
+		UserId: "3f2b6f0e-8d0c-4b7a-9b0e-6c1f2a3d4e5f",
 		Items: []*pb.OrderItemInput{
 			{ProductId: "prod-1", ProductName: "Product 1", Quantity: 1, Price: 10.0},
 		},
@@ -258,8 +266,8 @@ func TestUpdateOrderStatus_Success(t *testing.T) {
 
 func TestCancelOrder_Success(t *testing.T) {
 	mockRepo := &MockRepository{
-		CancelFunc: func(ctx context.Context, id string) error {
-			return nil
+		CancelFunc: func(ctx context.Context, id, reason string) (*Order, error) {
+			return &Order{ID: id, Status: OrderStatusCancelled}, nil
 		},
 	}
 
