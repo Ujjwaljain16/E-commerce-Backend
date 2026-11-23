@@ -58,6 +58,14 @@ func (r *mutationResolver) RefreshToken(ctx context.Context, refreshToken string
 	return &AuthPayload{User: toUser(profile.GetUser()), AccessToken: resp.GetAccessToken(), RefreshToken: resp.GetRefreshToken()}, nil
 }
 
+// Logout is the resolver for the logout field.
+func (r *mutationResolver) Logout(ctx context.Context, refreshToken string) (bool, error) {
+	if _, err := r.AccountSvc.Logout(ctx, &accountpb.LogoutRequest{RefreshToken: refreshToken}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // UpdateProfile is the resolver for the updateProfile field.
 func (r *mutationResolver) UpdateProfile(ctx context.Context, name *string, phone *string) (*User, error) {
 	claims, err := requireUser(ctx)

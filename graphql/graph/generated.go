@@ -60,6 +60,7 @@ type ComplexityRoot struct {
 		DeleteAccount     func(childComplexity int) int
 		DeleteProduct     func(childComplexity int, id string) int
 		Login             func(childComplexity int, email string, password string) int
+		Logout            func(childComplexity int, refreshToken string) int
 		RefreshToken      func(childComplexity int, refreshToken string) int
 		RefundPayment     func(childComplexity int, paymentID string, reason string) int
 		Register          func(childComplexity int, input RegisterInput) int
@@ -186,6 +187,7 @@ type MutationResolver interface {
 	Register(ctx context.Context, input RegisterInput) (*AuthPayload, error)
 	Login(ctx context.Context, email string, password string) (*AuthPayload, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthPayload, error)
+	Logout(ctx context.Context, refreshToken string) (bool, error)
 	UpdateProfile(ctx context.Context, name *string, phone *string) (*User, error)
 	ChangePassword(ctx context.Context, oldPassword string, newPassword string) (bool, error)
 	DeleteAccount(ctx context.Context) (bool, error)
@@ -320,6 +322,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.Login(childComplexity, args["email"].(string), args["password"].(string)), true
+	case "Mutation.logout":
+		if e.complexity.Mutation.Logout == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_logout_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.Logout(childComplexity, args["refreshToken"].(string)), true
 	case "Mutation.refreshToken":
 		if e.complexity.Mutation.RefreshToken == nil {
 			break
@@ -1231,6 +1244,8 @@ type Mutation {
   register(input: RegisterInput!): AuthPayload!
   login(email: String!, password: String!): AuthPayload!
   refreshToken(refreshToken: String!): AuthPayload!
+  "Revokes the refresh token. The access token stays valid until it expires (15 minutes)."
+  logout(refreshToken: String!): Boolean!
 
   "Arguments left out keep their current value."
   updateProfile(name: String, phone: String): User!
@@ -1339,6 +1354,17 @@ func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["password"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_logout_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "refreshToken", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["refreshToken"] = arg0
 	return args, nil
 }
 
@@ -1888,6 +1914,47 @@ func (ec *executionContext) fieldContext_Mutation_refreshToken(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_refreshToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_logout(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_logout,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().Logout(ctx, fc.Args["refreshToken"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_logout(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_logout_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -7008,6 +7075,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "refreshToken":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_refreshToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "logout":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_logout(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

@@ -196,6 +196,8 @@ type Mutation {
   register(input: RegisterInput!): AuthPayload!
   login(email: String!, password: String!): AuthPayload!
   refreshToken(refreshToken: String!): AuthPayload!
+  "Revokes the refresh token. The access token stays valid until it expires (15 minutes)."
+  logout(refreshToken: String!): Boolean!
 
   "Arguments left out keep their current value."
   updateProfile(name: String, phone: String): User!

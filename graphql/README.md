@@ -70,6 +70,8 @@ Send the access token from `login`/`register`/`refreshToken`:
 Authorization: Bearer <accessToken>
 ```
 
+Access tokens last 15 minutes. `refreshToken` swaps a refresh token for a new pair and the old refresh token stops working; presenting a used one again signs out all of that user's sessions. `logout(refreshToken)` revokes it.
+
 A missing, expired or invalid token does not fail the request; it just runs unauthenticated, and fields that need a user return `UNAUTHENTICATED`. The caller's identity always comes from the token, never from arguments. Admin-only fields return `FORBIDDEN` for regular users. Orders (and their payments) that belong to someone else return `NOT_FOUND`, exactly like orders that don't exist.
 
 ## Examples
