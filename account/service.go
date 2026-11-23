@@ -3,6 +3,8 @@ package account
 import (
 	"context"
 	"errors"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
@@ -34,9 +36,16 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 	if req.Email == "" || req.Password == "" || req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "email, password, and name are required")
 	}
+	email, err := normalizeEmail(req.Email)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "email is not valid")
+	}
+	if err := validatePassword(req.Password); err != nil {
+		return nil, err
+	}
 
-	// Create account with default USER role
-	account, err := s.repo.Create(ctx, req.Email, req.Password, req.Name, req.Phone, "USER")
+	// Self-registration always gets the USER role; admins come from EnsureAdmin.
+	account, err := s.repo.Create(ctx, email, req.Password, req.Name, req.Phone, "USER")
 	if err != nil {
 		if errors.Is(err, ErrEmailAlreadyExists) {
 			return nil, status.Error(codes.AlreadyExists, "email already exists")
@@ -74,7 +83,7 @@ func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginRes
 	}
 
 	// Verify credentials
-	account, err := s.repo.VerifyPassword(ctx, req.Email, req.Password)
+	account, err := s.repo.VerifyPassword(ctx, strings.ToLower(strings.TrimSpace(req.Email)), req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
@@ -184,6 +193,10 @@ func (s *Service) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequ
 		return nil, status.Error(codes.Unauthenticated, "invalid old password")
 	}
 
+	if err := validatePassword(req.NewPassword); err != nil {
+		return nil, err
+	}
+
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -266,4 +279,37 @@ func (s *Service) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest)
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+// EnsureAdmin creates the bootstrap admin account if it does not exist yet. Registration never
+// grants ADMIN, so this is the only way to get the first admin in a fresh environment.
+func (s *Service) EnsureAdmin(ctx context.Context, email, password string) error {
+	normalized, err := normalizeEmail(email)
+	if err != nil {
+		return errors.New("admin email is not valid")
+	}
+	if err := validatePassword(password); err != nil {
+		return errors.New("admin password must be at least 8 characters")
+	}
+	_, err = s.repo.Create(ctx, normalized, password, "Administrator", "", "ADMIN")
+	if errors.Is(err, ErrEmailAlreadyExists) {
+		return nil
+	}
+	return err
+}
+
+func normalizeEmail(raw string) (string, error) {
+	addr, err := mail.ParseAddress(strings.TrimSpace(raw))
+	if err != nil || addr.Name != "" {
+		return "", errors.New("invalid email")
+	}
+	return strings.ToLower(addr.Address), nil
+}
+
+func validatePassword(p string) error {
+	if len(p) < 8 || len(p) > 72 {
+		// bcrypt ignores everything after 72 bytes, so longer passwords would silently be truncated.
+		return status.Error(codes.InvalidArgument, "password must be between 8 and 72 characters")
+	}
+	return nil
 }
