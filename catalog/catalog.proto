@@ -95,6 +95,37 @@ message SearchProductsResponse {
     int32 total = 2;
 }
 
+// ReserveStock
+message StockItem {
+    string product_id = 1;
+    int32 quantity = 2;
+}
+
+message ReservedItem {
+    string product_id = 1;
+    string product_name = 2;
+    int32 quantity = 3;
+    double unit_price = 4;
+}
+
+message ReserveStockRequest {
+    string order_id = 1;
+    repeated StockItem items = 2;
+}
+
+message ReserveStockResponse {
+    repeated ReservedItem items = 1;
+}
+
+// ReleaseStock
+message ReleaseStockRequest {
+    string order_id = 1;
+}
+
+message ReleaseStockResponse {
+    bool released = 1; // false when there was nothing reserved (already released or never reserved)
+}
+
 service CatalogService {
     rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse);
     rpc GetProduct(GetProductRequest) returns (GetProductResponse);
@@ -102,4 +133,9 @@ service CatalogService {
     rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse);
     rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse);
+    // ReserveStock atomically decrements stock for every item of an order and returns
+    // the authoritative name and price of each product. Idempotent per order_id.
+    rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
+    // ReleaseStock returns reserved stock for an order (cancellation, failed payment). Idempotent.
+    rpc ReleaseStock(ReleaseStockRequest) returns (ReleaseStockResponse);
 }
