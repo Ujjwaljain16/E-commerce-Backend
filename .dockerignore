@@ -1,0 +1,11 @@
+.git
+.github
+.worktrees
+**/*.exe
+bin/
+coverage.*
+k8s/
+monitoring/
+tests/
+docs/
+**/*.md

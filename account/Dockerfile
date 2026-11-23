@@ -1,31 +1,22 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
 
-# Install build dependencies
-RUN apk add --no-cache git
-
-# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build the account service
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o account-service ./account/cmd/account
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/account-service ./account/cmd/account
 
-# Final stage
-FROM alpine:latest
+# Final stage: no shell, no package manager, runs as an unprivileged user
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk --no-cache add ca-certificates
+COPY --from=builder /out/account-service /account-service
 
-WORKDIR /root/
+EXPOSE 50051 9090
 
-# Copy binary from builder
-COPY --from=builder /app/account-service .
+USER nonroot:nonroot
 
-EXPOSE 50051
-
-CMD ["./account-service"]
+ENTRYPOINT ["/account-service"]
