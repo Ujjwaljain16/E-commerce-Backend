@@ -87,25 +87,25 @@ type ComplexityRoot struct {
 	}
 
 	Order struct {
-		BillingAddress  func(childComplexity int) int
-		CreatedAt       func(childComplexity int) int
-		ID              func(childComplexity int) int
-		Items           func(childComplexity int) int
-		PaymentMethod   func(childComplexity int) int
-		ShippingAddress func(childComplexity int) int
-		Status          func(childComplexity int) int
-		TotalAmount     func(childComplexity int) int
-		UpdatedAt       func(childComplexity int) int
-		UserID          func(childComplexity int) int
+		BillingAddress   func(childComplexity int) int
+		CreatedAt        func(childComplexity int) int
+		ID               func(childComplexity int) int
+		Items            func(childComplexity int) int
+		PaymentMethod    func(childComplexity int) int
+		ShippingAddress  func(childComplexity int) int
+		Status           func(childComplexity int) int
+		TotalAmountCents func(childComplexity int) int
+		UpdatedAt        func(childComplexity int) int
+		UserID           func(childComplexity int) int
 	}
 
 	OrderItem struct {
-		ID          func(childComplexity int) int
-		Price       func(childComplexity int) int
-		ProductID   func(childComplexity int) int
-		ProductName func(childComplexity int) int
-		Quantity    func(childComplexity int) int
-		Subtotal    func(childComplexity int) int
+		ID            func(childComplexity int) int
+		PriceCents    func(childComplexity int) int
+		ProductID     func(childComplexity int) int
+		ProductName   func(childComplexity int) int
+		Quantity      func(childComplexity int) int
+		SubtotalCents func(childComplexity int) int
 	}
 
 	OrderPage struct {
@@ -116,7 +116,7 @@ type ComplexityRoot struct {
 	}
 
 	Payment struct {
-		Amount        func(childComplexity int) int
+		AmountCents   func(childComplexity int) int
 		CreatedAt     func(childComplexity int) int
 		Currency      func(childComplexity int) int
 		FailureReason func(childComplexity int) int
@@ -143,7 +143,7 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 		Images      func(childComplexity int) int
 		Name        func(childComplexity int) int
-		Price       func(childComplexity int) int
+		PriceCents  func(childComplexity int) int
 		Sku         func(childComplexity int) int
 		Stock       func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
@@ -503,12 +503,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Order.Status(childComplexity), true
-	case "Order.totalAmount":
-		if e.complexity.Order.TotalAmount == nil {
+	case "Order.totalAmountCents":
+		if e.complexity.Order.TotalAmountCents == nil {
 			break
 		}
 
-		return e.complexity.Order.TotalAmount(childComplexity), true
+		return e.complexity.Order.TotalAmountCents(childComplexity), true
 	case "Order.updatedAt":
 		if e.complexity.Order.UpdatedAt == nil {
 			break
@@ -528,12 +528,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.OrderItem.ID(childComplexity), true
-	case "OrderItem.price":
-		if e.complexity.OrderItem.Price == nil {
+	case "OrderItem.priceCents":
+		if e.complexity.OrderItem.PriceCents == nil {
 			break
 		}
 
-		return e.complexity.OrderItem.Price(childComplexity), true
+		return e.complexity.OrderItem.PriceCents(childComplexity), true
 	case "OrderItem.productId":
 		if e.complexity.OrderItem.ProductID == nil {
 			break
@@ -552,12 +552,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.OrderItem.Quantity(childComplexity), true
-	case "OrderItem.subtotal":
-		if e.complexity.OrderItem.Subtotal == nil {
+	case "OrderItem.subtotalCents":
+		if e.complexity.OrderItem.SubtotalCents == nil {
 			break
 		}
 
-		return e.complexity.OrderItem.Subtotal(childComplexity), true
+		return e.complexity.OrderItem.SubtotalCents(childComplexity), true
 
 	case "OrderPage.items":
 		if e.complexity.OrderPage.Items == nil {
@@ -584,12 +584,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.OrderPage.Total(childComplexity), true
 
-	case "Payment.amount":
-		if e.complexity.Payment.Amount == nil {
+	case "Payment.amountCents":
+		if e.complexity.Payment.AmountCents == nil {
 			break
 		}
 
-		return e.complexity.Payment.Amount(childComplexity), true
+		return e.complexity.Payment.AmountCents(childComplexity), true
 	case "Payment.createdAt":
 		if e.complexity.Payment.CreatedAt == nil {
 			break
@@ -712,12 +712,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Product.Name(childComplexity), true
-	case "Product.price":
-		if e.complexity.Product.Price == nil {
+	case "Product.priceCents":
+		if e.complexity.Product.PriceCents == nil {
 			break
 		}
 
-		return e.complexity.Product.Price(childComplexity), true
+		return e.complexity.Product.PriceCents(childComplexity), true
 	case "Product.sku":
 		if e.complexity.Product.Sku == nil {
 			break
@@ -1036,6 +1036,12 @@ var sources = []*ast.Source{
 	{Name: "../schema.graphql", Input: `"RFC 3339 timestamp."
 scalar Time
 
+"""
+An amount of money as a whole number of minor units (cents for USD), e.g. 3998 means $39.98.
+A 64-bit integer, so it is not limited to the 32-bit range of Int. Never a float.
+"""
+scalar Money
+
 type User {
   id: ID!
   email: String!
@@ -1059,7 +1065,7 @@ type Product {
   id: ID!
   name: String!
   description: String!
-  price: Float!
+  priceCents: Money!
   sku: String!
   stock: Int!
   images: [String!]!
@@ -1090,8 +1096,8 @@ type OrderItem {
   productId: ID!
   productName: String!
   quantity: Int!
-  price: Float!
-  subtotal: Float!
+  priceCents: Money!
+  subtotalCents: Money!
 }
 
 type Order {
@@ -1099,7 +1105,7 @@ type Order {
   userId: ID!
   status: OrderStatus!
   items: [OrderItem!]!
-  totalAmount: Float!
+  totalAmountCents: Money!
   shippingAddress: String!
   billingAddress: String!
   paymentMethod: String!
@@ -1126,7 +1132,7 @@ type Payment {
   id: ID!
   orderId: ID!
   userId: ID!
-  amount: Float!
+  amountCents: Money!
   currency: String!
   status: PaymentStatus!
   method: String!
@@ -1171,7 +1177,8 @@ input RegisterInput {
 input CreateProductInput {
   name: String!
   description: String
-  price: Float!
+  "Must be greater than zero."
+  priceCents: Money!
   sku: String!
   stock: Int!
   images: [String!]
@@ -1182,7 +1189,7 @@ input CreateProductInput {
 input UpdateProductInput {
   name: String
   description: String
-  price: Float
+  priceCents: Money
   stock: Int
   images: [String!]
   category: String
@@ -2049,8 +2056,8 @@ func (ec *executionContext) fieldContext_Mutation_createProduct(ctx context.Cont
 				return ec.fieldContext_Product_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Product_description(ctx, field)
-			case "price":
-				return ec.fieldContext_Product_price(ctx, field)
+			case "priceCents":
+				return ec.fieldContext_Product_priceCents(ctx, field)
 			case "sku":
 				return ec.fieldContext_Product_sku(ctx, field)
 			case "stock":
@@ -2112,8 +2119,8 @@ func (ec *executionContext) fieldContext_Mutation_updateProduct(ctx context.Cont
 				return ec.fieldContext_Product_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Product_description(ctx, field)
-			case "price":
-				return ec.fieldContext_Product_price(ctx, field)
+			case "priceCents":
+				return ec.fieldContext_Product_priceCents(ctx, field)
 			case "sku":
 				return ec.fieldContext_Product_sku(ctx, field)
 			case "stock":
@@ -2218,8 +2225,8 @@ func (ec *executionContext) fieldContext_Mutation_createOrder(ctx context.Contex
 				return ec.fieldContext_Order_status(ctx, field)
 			case "items":
 				return ec.fieldContext_Order_items(ctx, field)
-			case "totalAmount":
-				return ec.fieldContext_Order_totalAmount(ctx, field)
+			case "totalAmountCents":
+				return ec.fieldContext_Order_totalAmountCents(ctx, field)
 			case "shippingAddress":
 				return ec.fieldContext_Order_shippingAddress(ctx, field)
 			case "billingAddress":
@@ -2322,8 +2329,8 @@ func (ec *executionContext) fieldContext_Mutation_updateOrderStatus(ctx context.
 				return ec.fieldContext_Order_status(ctx, field)
 			case "items":
 				return ec.fieldContext_Order_items(ctx, field)
-			case "totalAmount":
-				return ec.fieldContext_Order_totalAmount(ctx, field)
+			case "totalAmountCents":
+				return ec.fieldContext_Order_totalAmountCents(ctx, field)
 			case "shippingAddress":
 				return ec.fieldContext_Order_shippingAddress(ctx, field)
 			case "billingAddress":
@@ -2383,8 +2390,8 @@ func (ec *executionContext) fieldContext_Mutation_refundPayment(ctx context.Cont
 				return ec.fieldContext_Payment_orderId(ctx, field)
 			case "userId":
 				return ec.fieldContext_Payment_userId(ctx, field)
-			case "amount":
-				return ec.fieldContext_Payment_amount(ctx, field)
+			case "amountCents":
+				return ec.fieldContext_Payment_amountCents(ctx, field)
 			case "currency":
 				return ec.fieldContext_Payment_currency(ctx, field)
 			case "status":
@@ -2902,10 +2909,10 @@ func (ec *executionContext) fieldContext_Order_items(_ context.Context, field gr
 				return ec.fieldContext_OrderItem_productName(ctx, field)
 			case "quantity":
 				return ec.fieldContext_OrderItem_quantity(ctx, field)
-			case "price":
-				return ec.fieldContext_OrderItem_price(ctx, field)
-			case "subtotal":
-				return ec.fieldContext_OrderItem_subtotal(ctx, field)
+			case "priceCents":
+				return ec.fieldContext_OrderItem_priceCents(ctx, field)
+			case "subtotalCents":
+				return ec.fieldContext_OrderItem_subtotalCents(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type OrderItem", field.Name)
 		},
@@ -2913,30 +2920,30 @@ func (ec *executionContext) fieldContext_Order_items(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Order_totalAmount(ctx context.Context, field graphql.CollectedField, obj *Order) (ret graphql.Marshaler) {
+func (ec *executionContext) _Order_totalAmountCents(ctx context.Context, field graphql.CollectedField, obj *Order) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Order_totalAmount,
+		ec.fieldContext_Order_totalAmountCents,
 		func(ctx context.Context) (any, error) {
-			return obj.TotalAmount, nil
+			return obj.TotalAmountCents, nil
 		},
 		nil,
-		ec.marshalNFloat2float64,
+		ec.marshalNMoney2int64,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Order_totalAmount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Order_totalAmountCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Order",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Float does not have child fields")
+			return nil, errors.New("field of type Money does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3203,59 +3210,59 @@ func (ec *executionContext) fieldContext_OrderItem_quantity(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _OrderItem_price(ctx context.Context, field graphql.CollectedField, obj *OrderItem) (ret graphql.Marshaler) {
+func (ec *executionContext) _OrderItem_priceCents(ctx context.Context, field graphql.CollectedField, obj *OrderItem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_OrderItem_price,
+		ec.fieldContext_OrderItem_priceCents,
 		func(ctx context.Context) (any, error) {
-			return obj.Price, nil
+			return obj.PriceCents, nil
 		},
 		nil,
-		ec.marshalNFloat2float64,
+		ec.marshalNMoney2int64,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_OrderItem_price(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_OrderItem_priceCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "OrderItem",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Float does not have child fields")
+			return nil, errors.New("field of type Money does not have child fields")
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _OrderItem_subtotal(ctx context.Context, field graphql.CollectedField, obj *OrderItem) (ret graphql.Marshaler) {
+func (ec *executionContext) _OrderItem_subtotalCents(ctx context.Context, field graphql.CollectedField, obj *OrderItem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_OrderItem_subtotal,
+		ec.fieldContext_OrderItem_subtotalCents,
 		func(ctx context.Context) (any, error) {
-			return obj.Subtotal, nil
+			return obj.SubtotalCents, nil
 		},
 		nil,
-		ec.marshalNFloat2float64,
+		ec.marshalNMoney2int64,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_OrderItem_subtotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_OrderItem_subtotalCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "OrderItem",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Float does not have child fields")
+			return nil, errors.New("field of type Money does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3293,8 +3300,8 @@ func (ec *executionContext) fieldContext_OrderPage_items(_ context.Context, fiel
 				return ec.fieldContext_Order_status(ctx, field)
 			case "items":
 				return ec.fieldContext_Order_items(ctx, field)
-			case "totalAmount":
-				return ec.fieldContext_Order_totalAmount(ctx, field)
+			case "totalAmountCents":
+				return ec.fieldContext_Order_totalAmountCents(ctx, field)
 			case "shippingAddress":
 				return ec.fieldContext_Order_shippingAddress(ctx, field)
 			case "billingAddress":
@@ -3486,30 +3493,30 @@ func (ec *executionContext) fieldContext_Payment_userId(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _Payment_amount(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
+func (ec *executionContext) _Payment_amountCents(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Payment_amount,
+		ec.fieldContext_Payment_amountCents,
 		func(ctx context.Context) (any, error) {
-			return obj.Amount, nil
+			return obj.AmountCents, nil
 		},
 		nil,
-		ec.marshalNFloat2float64,
+		ec.marshalNMoney2int64,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Payment_amount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Payment_amountCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Payment",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Float does not have child fields")
+			return nil, errors.New("field of type Money does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3748,8 +3755,8 @@ func (ec *executionContext) fieldContext_PaymentPage_items(_ context.Context, fi
 				return ec.fieldContext_Payment_orderId(ctx, field)
 			case "userId":
 				return ec.fieldContext_Payment_userId(ctx, field)
-			case "amount":
-				return ec.fieldContext_Payment_amount(ctx, field)
+			case "amountCents":
+				return ec.fieldContext_Payment_amountCents(ctx, field)
 			case "currency":
 				return ec.fieldContext_Payment_currency(ctx, field)
 			case "status":
@@ -3945,30 +3952,30 @@ func (ec *executionContext) fieldContext_Product_description(_ context.Context, 
 	return fc, nil
 }
 
-func (ec *executionContext) _Product_price(ctx context.Context, field graphql.CollectedField, obj *Product) (ret graphql.Marshaler) {
+func (ec *executionContext) _Product_priceCents(ctx context.Context, field graphql.CollectedField, obj *Product) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Product_price,
+		ec.fieldContext_Product_priceCents,
 		func(ctx context.Context) (any, error) {
-			return obj.Price, nil
+			return obj.PriceCents, nil
 		},
 		nil,
-		ec.marshalNFloat2float64,
+		ec.marshalNMoney2int64,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Product_price(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Product_priceCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Product",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Float does not have child fields")
+			return nil, errors.New("field of type Money does not have child fields")
 		},
 	}
 	return fc, nil
@@ -4178,8 +4185,8 @@ func (ec *executionContext) fieldContext_ProductPage_items(_ context.Context, fi
 				return ec.fieldContext_Product_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Product_description(ctx, field)
-			case "price":
-				return ec.fieldContext_Product_price(ctx, field)
+			case "priceCents":
+				return ec.fieldContext_Product_priceCents(ctx, field)
 			case "sku":
 				return ec.fieldContext_Product_sku(ctx, field)
 			case "stock":
@@ -4366,8 +4373,8 @@ func (ec *executionContext) fieldContext_Query_product(ctx context.Context, fiel
 				return ec.fieldContext_Product_name(ctx, field)
 			case "description":
 				return ec.fieldContext_Product_description(ctx, field)
-			case "price":
-				return ec.fieldContext_Product_price(ctx, field)
+			case "priceCents":
+				return ec.fieldContext_Product_priceCents(ctx, field)
 			case "sku":
 				return ec.fieldContext_Product_sku(ctx, field)
 			case "stock":
@@ -4533,8 +4540,8 @@ func (ec *executionContext) fieldContext_Query_order(ctx context.Context, field 
 				return ec.fieldContext_Order_status(ctx, field)
 			case "items":
 				return ec.fieldContext_Order_items(ctx, field)
-			case "totalAmount":
-				return ec.fieldContext_Order_totalAmount(ctx, field)
+			case "totalAmountCents":
+				return ec.fieldContext_Order_totalAmountCents(ctx, field)
 			case "shippingAddress":
 				return ec.fieldContext_Order_shippingAddress(ctx, field)
 			case "billingAddress":
@@ -4696,8 +4703,8 @@ func (ec *executionContext) fieldContext_Query_paymentForOrder(ctx context.Conte
 				return ec.fieldContext_Payment_orderId(ctx, field)
 			case "userId":
 				return ec.fieldContext_Payment_userId(ctx, field)
-			case "amount":
-				return ec.fieldContext_Payment_amount(ctx, field)
+			case "amountCents":
+				return ec.fieldContext_Payment_amountCents(ctx, field)
 			case "currency":
 				return ec.fieldContext_Payment_currency(ctx, field)
 			case "status":
@@ -6702,7 +6709,7 @@ func (ec *executionContext) unmarshalInputCreateProductInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "price", "sku", "stock", "images", "category"}
+	fieldsInOrder := [...]string{"name", "description", "priceCents", "sku", "stock", "images", "category"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -6723,13 +6730,13 @@ func (ec *executionContext) unmarshalInputCreateProductInput(ctx context.Context
 				return it, err
 			}
 			it.Description = data
-		case "price":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("price"))
-			data, err := ec.unmarshalNFloat2float64(ctx, v)
+		case "priceCents":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("priceCents"))
+			data, err := ec.unmarshalNMoney2int64(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Price = data
+			it.PriceCents = data
 		case "sku":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sku"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -6853,7 +6860,7 @@ func (ec *executionContext) unmarshalInputUpdateProductInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "price", "stock", "images", "category"}
+	fieldsInOrder := [...]string{"name", "description", "priceCents", "stock", "images", "category"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -6874,13 +6881,13 @@ func (ec *executionContext) unmarshalInputUpdateProductInput(ctx context.Context
 				return it, err
 			}
 			it.Description = data
-		case "price":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("price"))
-			data, err := ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+		case "priceCents":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("priceCents"))
+			data, err := ec.unmarshalOMoney2ᚖint64(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Price = data
+			it.PriceCents = data
 		case "stock":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stock"))
 			data, err := ec.unmarshalOInt2ᚖint32(ctx, v)
@@ -7254,8 +7261,8 @@ func (ec *executionContext) _Order(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "totalAmount":
-			out.Values[i] = ec._Order_totalAmount(ctx, field, obj)
+		case "totalAmountCents":
+			out.Values[i] = ec._Order_totalAmountCents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -7332,13 +7339,13 @@ func (ec *executionContext) _OrderItem(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "price":
-			out.Values[i] = ec._OrderItem_price(ctx, field, obj)
+		case "priceCents":
+			out.Values[i] = ec._OrderItem_priceCents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "subtotal":
-			out.Values[i] = ec._OrderItem_subtotal(ctx, field, obj)
+		case "subtotalCents":
+			out.Values[i] = ec._OrderItem_subtotalCents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -7445,8 +7452,8 @@ func (ec *executionContext) _Payment(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "amount":
-			out.Values[i] = ec._Payment_amount(ctx, field, obj)
+		case "amountCents":
+			out.Values[i] = ec._Payment_amountCents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -7582,8 +7589,8 @@ func (ec *executionContext) _Product(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "price":
-			out.Values[i] = ec._Product_price(ctx, field, obj)
+		case "priceCents":
+			out.Values[i] = ec._Product_priceCents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -8397,22 +8404,6 @@ func (ec *executionContext) unmarshalNCreateProductInput2githubᚗcomᚋUjjwalja
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
-	res, err := graphql.UnmarshalFloatContext(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
-	_ = sel
-	res := graphql.MarshalFloatContext(v)
-	if res == graphql.Null {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-	}
-	return graphql.WrapContextMarshaler(ctx, res)
-}
-
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -8437,6 +8428,22 @@ func (ec *executionContext) unmarshalNInt2int32(ctx context.Context, v any) (int
 func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.SelectionSet, v int32) graphql.Marshaler {
 	_ = sel
 	res := graphql.MarshalInt32(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNMoney2int64(ctx context.Context, v any) (int64, error) {
+	res, err := graphql.UnmarshalInt64(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNMoney2int64(ctx context.Context, sel ast.SelectionSet, v int64) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt64(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -9176,23 +9183,6 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v any) (*float64, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := graphql.UnmarshalFloatContext(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel ast.SelectionSet, v *float64) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	_ = sel
-	res := graphql.MarshalFloatContext(*v)
-	return graphql.WrapContextMarshaler(ctx, res)
-}
-
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -9226,6 +9216,24 @@ func (ec *executionContext) marshalOInt2ᚖint32(ctx context.Context, sel ast.Se
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalInt32(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOMoney2ᚖint64(ctx context.Context, v any) (*int64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt64(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMoney2ᚖint64(ctx context.Context, sel ast.SelectionSet, v *int64) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalInt64(*v)
 	return res
 }
 

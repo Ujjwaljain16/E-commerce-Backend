@@ -81,7 +81,7 @@ func toProduct(p *catalogpb.Product) *Product {
 		ID:          p.GetId(),
 		Name:        p.GetName(),
 		Description: p.GetDescription(),
-		Price:       p.GetPrice(),
+		PriceCents:  p.GetPriceCents(),
 		Sku:         p.GetSku(),
 		Stock:       p.GetStock(),
 		Images:      images,
@@ -119,8 +119,8 @@ func toOrder(o *orderpb.Order) *Order {
 			ProductID:   it.GetProductId(),
 			ProductName: it.GetProductName(),
 			Quantity:    it.GetQuantity(),
-			Price:       it.GetPrice(),
-			Subtotal:    it.GetSubtotal(),
+			PriceCents:    it.GetPriceCents(),
+			SubtotalCents: it.GetSubtotalCents(),
 		})
 	}
 	return &Order{
@@ -128,7 +128,7 @@ func toOrder(o *orderpb.Order) *Order {
 		UserID:          o.GetUserId(),
 		Status:          toOrderStatus(o.GetStatus()),
 		Items:           items,
-		TotalAmount:     o.GetTotalAmount(),
+		TotalAmountCents: o.GetTotalAmountCents(),
 		ShippingAddress: o.GetShippingAddress(),
 		BillingAddress:  o.GetBillingAddress(),
 		PaymentMethod:   o.GetPaymentMethod(),
@@ -157,7 +157,7 @@ func toPayment(p *paymentpb.Payment) *Payment {
 		ID:            p.GetId(),
 		OrderID:       p.GetOrderId(),
 		UserID:        p.GetUserId(),
-		Amount:        p.GetAmount(),
+		AmountCents:   p.GetAmountCents(),
 		Currency:      p.GetCurrency(),
 		Status:        toPaymentStatus(p.GetStatus()),
 		Method:        p.GetMethod(),

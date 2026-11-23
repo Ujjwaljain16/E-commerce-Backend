@@ -1,6 +1,12 @@
 "RFC 3339 timestamp."
 scalar Time
 
+"""
+An amount of money as a whole number of minor units (cents for USD), e.g. 3998 means $39.98.
+A 64-bit integer, so it is not limited to the 32-bit range of Int. Never a float.
+"""
+scalar Money
+
 type User {
   id: ID!
   email: String!
@@ -24,7 +30,7 @@ type Product {
   id: ID!
   name: String!
   description: String!
-  price: Float!
+  priceCents: Money!
   sku: String!
   stock: Int!
   images: [String!]!
@@ -55,8 +61,8 @@ type OrderItem {
   productId: ID!
   productName: String!
   quantity: Int!
-  price: Float!
-  subtotal: Float!
+  priceCents: Money!
+  subtotalCents: Money!
 }
 
 type Order {
@@ -64,7 +70,7 @@ type Order {
   userId: ID!
   status: OrderStatus!
   items: [OrderItem!]!
-  totalAmount: Float!
+  totalAmountCents: Money!
   shippingAddress: String!
   billingAddress: String!
   paymentMethod: String!
@@ -91,7 +97,7 @@ type Payment {
   id: ID!
   orderId: ID!
   userId: ID!
-  amount: Float!
+  amountCents: Money!
   currency: String!
   status: PaymentStatus!
   method: String!
@@ -136,7 +142,8 @@ input RegisterInput {
 input CreateProductInput {
   name: String!
   description: String
-  price: Float!
+  "Must be greater than zero."
+  priceCents: Money!
   sku: String!
   stock: Int!
   images: [String!]
@@ -147,7 +154,7 @@ input CreateProductInput {
 input UpdateProductInput {
   name: String
   description: String
-  price: Float
+  priceCents: Money
   stock: Int
   images: [String!]
   category: String
