@@ -10,6 +10,8 @@ import (
 	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/cache"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/events"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/kafka"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/server"
 )
@@ -30,6 +32,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	port := getEnv("PORT", "50052")
 	metricsPort := getEnv("METRICS_PORT", "9091")
 	redisAddr := os.Getenv("REDIS_ADDR")
+	brokers := kafka.Brokers(getEnv("KAFKA_BROKERS", "localhost:9092"))
 
 	db, err := database.Open(ctx, dbURL)
 	if err != nil {
@@ -52,9 +55,23 @@ func run(ctx context.Context, log *logger.Logger) error {
 		log.Info(ctx, "product cache enabled", map[string]interface{}{"redis": redisAddr})
 	}
 
+	consumer := kafka.NewConsumer(kafka.ConsumerConfig{
+		Brokers: brokers, GroupID: "catalog-service", Topics: []string{events.TopicOrderCancelled}, Service: "catalog-service",
+	}, log)
+	defer consumer.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := consumer.Run(ctx, catalog.NewOrderCancelledHandler(repo, log).Handle); err != nil {
+			log.Error(ctx, "order event consumer stopped", map[string]interface{}{"error": err.Error()})
+		}
+	}()
+
 	srv := server.New("catalog-service", log, port, metricsPort, db.PingContext)
 	pb.RegisterCatalogServiceServer(srv.GRPC, catalog.NewService(repo, log))
-	return srv.Run(ctx)
+	err = srv.Run(ctx)
+	<-done
+	return err
 }
 
 func getEnv(key, defaultValue string) string {

@@ -5,9 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/kafka"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
+	kafkago "github.com/segmentio/kafka-go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -201,4 +205,26 @@ func TestCachedRepository_ReadThroughAndInvalidate(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("expected reservation to invalidate the cached product, reads=%d", calls)
 	}
+}
+
+func TestOrderCancelledHandler_ReleasesAndSkipsGarbage(t *testing.T) {
+	var released []string
+	h := NewOrderCancelledHandler(&MockRepository{ReleaseFunc: func(_ context.Context, id string) ([]string, error) {
+		released = append(released, id)
+		return []string{productA}, nil
+	}}, logger.New("test"))
+
+	if err := h.Handle(context.Background(), kafkaMsg(`{"order_id":"`+testOrderID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if len(released) != 1 || released[0] != testOrderID {
+		t.Fatalf("expected release for %s, got %v", testOrderID, released)
+	}
+	if err := h.Handle(context.Background(), kafkaMsg(`nope`)); !errors.Is(err, kafka.ErrSkip) {
+		t.Fatalf("expected ErrSkip, got %v", err)
+	}
+}
+
+func kafkaMsg(v string) kafkago.Message {
+	return kafkago.Message{Topic: "order.cancelled", Value: []byte(v)}
 }
