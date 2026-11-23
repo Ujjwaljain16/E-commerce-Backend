@@ -27,15 +27,24 @@ type Service struct {
 	repo      Repository
 	inventory Inventory
 	log       *logger.Logger
+	currency  string
 }
 
-// NewService creates a new order service
+// NewService creates a new order service that prices orders in DefaultCurrency.
 func NewService(repo Repository, inventory Inventory, log *logger.Logger) *Service {
 	return &Service{
 		repo:      repo,
 		inventory: inventory,
 		log:       log,
+		currency:  DefaultCurrency,
 	}
+}
+
+// WithCurrency sets the ISO 4217 code new orders are priced in. Catalog prices are stored as plain
+// minor units, so this must match the currency the catalog was priced in.
+func (s *Service) WithCurrency(code string) *Service {
+	s.currency = code
+	return s
 }
 
 // CreateOrder reserves stock in the catalog, prices the items from the catalog (client prices are
@@ -99,6 +108,7 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 		ShippingAddress: req.ShippingAddress,
 		BillingAddress:  billing,
 		PaymentMethod:   req.PaymentMethod,
+		Currency:        s.currency,
 		Items:           items,
 	})
 	if err != nil {

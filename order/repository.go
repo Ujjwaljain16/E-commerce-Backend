@@ -17,6 +17,9 @@ import (
 // OutboxTable holds order events until the relay publishes them to Kafka.
 const OutboxTable = "order_outbox"
 
+// DefaultCurrency is used when no CURRENCY is configured.
+const DefaultCurrency = "USD"
+
 var (
 	// ErrOrderNotFound is returned when an order is not found
 	ErrOrderNotFound = errors.New("order not found")
@@ -63,8 +66,10 @@ type Order struct {
 	ShippingAddress  string
 	BillingAddress   string
 	PaymentMethod    string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Currency is the ISO 4217 code the amounts are in; empty means DefaultCurrency.
+	Currency  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Repository defines the interface for order data operations
@@ -114,11 +119,14 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 	order.CreatedAt = time.Now()
 	order.UpdatedAt = time.Now()
 	order.Status = OrderStatusPending
+	if order.Currency == "" {
+		order.Currency = DefaultCurrency
+	}
 
 	// Insert order
 	orderQuery := `
-		INSERT INTO orders (id, user_id, status, total_amount_cents, shipping_address, billing_address, payment_method, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO orders (id, user_id, status, total_amount_cents, shipping_address, billing_address, payment_method, created_at, updated_at, currency)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	_, err = tx.ExecContext(ctx, orderQuery,
 		order.ID,
@@ -130,6 +138,7 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 		order.PaymentMethod,
 		order.CreatedAt,
 		order.UpdatedAt,
+		order.Currency,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert order: %w", err)
@@ -165,7 +174,7 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 		OrderID:          order.ID,
 		UserID:           order.UserID,
 		TotalAmountCents: order.TotalAmountCents,
-		Currency:         "USD",
+		Currency:         order.Currency,
 		PaymentMethod:    order.PaymentMethod,
 	}
 	for _, it := range order.Items {

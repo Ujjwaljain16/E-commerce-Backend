@@ -308,3 +308,29 @@ func TestPriceOrder_RejectsOverflow(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateOrderUsesConfiguredCurrency(t *testing.T) {
+	for _, tc := range []struct{ configured, want string }{{"", "USD"}, {"INR", "INR"}} {
+		var got string
+		repo := &MockRepository{CreateFunc: func(_ context.Context, o *Order) (*Order, error) {
+			got = o.Currency
+			return o, nil
+		}}
+		svc := setupService(repo)
+		if tc.configured != "" {
+			svc = svc.WithCurrency(tc.configured)
+		}
+		_, err := svc.CreateOrder(context.Background(), &pb.CreateOrderRequest{
+			UserId:          "3f2b6f0e-8d0c-4b7a-9b0e-6c1f2a3d4e5f",
+			Items:           []*pb.OrderItemInput{{ProductId: "prod-1", Quantity: 1}},
+			ShippingAddress: "123 Main St",
+			PaymentMethod:   "razorpay",
+		})
+		if err != nil {
+			t.Fatalf("create order: %v", err)
+		}
+		if got != tc.want {
+			t.Errorf("configured %q: order currency = %q, want %q", tc.configured, got, tc.want)
+		}
+	}
+}

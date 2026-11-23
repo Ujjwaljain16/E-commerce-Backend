@@ -62,13 +62,13 @@ func (r *repository) ApplyPaymentResult(ctx context.Context, id string, succeede
 	if !succeeded {
 		next = OrderStatusCancelled
 	}
-	var userID string
+	var userID, currency string
 	var total int64
 	err = tx.QueryRowContext(ctx, `
 		UPDATE orders SET status = $1, updated_at = NOW()
 		WHERE id = $2 AND status = $3
-		RETURNING user_id, total_amount_cents`,
-		next, id, OrderStatusPending).Scan(&userID, &total)
+		RETURNING user_id, total_amount_cents, currency`,
+		next, id, OrderStatusPending).Scan(&userID, &total, &currency)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -78,7 +78,7 @@ func (r *repository) ApplyPaymentResult(ctx context.Context, id string, succeede
 
 	if succeeded {
 		err = outbox.Add(ctx, tx, OutboxTable, events.TopicOrderConfirmed, id,
-			events.OrderConfirmed{Meta: events.NewMeta(), OrderID: id, UserID: userID, TotalAmountCents: total})
+			events.OrderConfirmed{Meta: events.NewMeta(), OrderID: id, UserID: userID, TotalAmountCents: total, Currency: currency})
 	} else {
 		err = outbox.Add(ctx, tx, OutboxTable, events.TopicOrderCancelled, id,
 			events.OrderCancelled{Meta: events.NewMeta(), OrderID: id, UserID: userID, Reason: "payment failed: " + reason})
