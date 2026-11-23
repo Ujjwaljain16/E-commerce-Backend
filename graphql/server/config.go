@@ -26,6 +26,9 @@ type Config struct {
 	ComplexityLimit    int
 	CORSAllowedOrigins []string
 	PlaygroundEnabled  bool
+	// RazorpayKeyID is the public key clients open Razorpay Checkout with. The secret stays in the
+	// payment service.
+	RazorpayKeyID string
 }
 
 // LoadConfig reads the configuration using getenv (normally os.Getenv).
@@ -45,6 +48,7 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		OrderAddr:        get("ORDER_SERVICE_ADDR", "localhost:50053"),
 		PaymentAddr:      get("PAYMENT_SERVICE_ADDR", "localhost:50054"),
 		NotificationAddr: get("NOTIFICATION_SERVICE_ADDR", "localhost:50055"),
+		RazorpayKeyID:    strings.TrimSpace(getenv("RAZORPAY_KEY_ID")),
 	}
 	if cfg.JWTSecret == "" {
 		return Config{}, errors.New("JWT_SECRET is required")

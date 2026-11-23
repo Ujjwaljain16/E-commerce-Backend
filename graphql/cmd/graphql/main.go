@@ -46,9 +46,11 @@ func run() error {
 
 	// Durations only matter for issuing tokens; the gateway just validates them.
 	tokens := auth.NewTokenService(cfg.JWTSecret, 15*time.Minute, 7*24*time.Hour)
+	resolver := backends.Resolver(tokens)
+	resolver.RazorpayKeyID = cfg.RazorpayKeyID
 	router := server.NewRouter(server.RouterOptions{
 		Config:   cfg,
-		Resolver: backends.Resolver(tokens),
+		Resolver: resolver,
 		Ready:    backends.Ready,
 		Logger:   log,
 	})

@@ -55,6 +55,7 @@ type ComplexityRoot struct {
 	Mutation struct {
 		CancelOrder       func(childComplexity int, id string, reason *string) int
 		ChangePassword    func(childComplexity int, oldPassword string, newPassword string) int
+		ConfirmPayment    func(childComplexity int, orderID string, razorpayPaymentID string, razorpaySignature string) int
 		CreateOrder       func(childComplexity int, input CreateOrderInput) int
 		CreateProduct     func(childComplexity int, input CreateProductInput) int
 		DeleteAccount     func(childComplexity int) int
@@ -117,17 +118,20 @@ type ComplexityRoot struct {
 	}
 
 	Payment struct {
-		AmountCents   func(childComplexity int) int
-		CreatedAt     func(childComplexity int) int
-		Currency      func(childComplexity int) int
-		FailureReason func(childComplexity int) int
-		ID            func(childComplexity int) int
-		Method        func(childComplexity int) int
-		OrderID       func(childComplexity int) int
-		ProviderRef   func(childComplexity int) int
-		Status        func(childComplexity int) int
-		UpdatedAt     func(childComplexity int) int
-		UserID        func(childComplexity int) int
+		AmountCents     func(childComplexity int) int
+		Checkout        func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		Currency        func(childComplexity int) int
+		FailureReason   func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Method          func(childComplexity int) int
+		OrderID         func(childComplexity int) int
+		Provider        func(childComplexity int) int
+		ProviderOrderID func(childComplexity int) int
+		ProviderRef     func(childComplexity int) int
+		Status          func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+		UserID          func(childComplexity int) int
 	}
 
 	PaymentPage struct {
@@ -170,6 +174,13 @@ type ComplexityRoot struct {
 		SearchProducts  func(childComplexity int, query string, page *int32, pageSize *int32) int
 	}
 
+	RazorpayCheckout struct {
+		AmountCents func(childComplexity int) int
+		Currency    func(childComplexity int) int
+		KeyID       func(childComplexity int) int
+		OrderID     func(childComplexity int) int
+	}
+
 	User struct {
 		CreatedAt  func(childComplexity int) int
 		Email      func(childComplexity int) int
@@ -198,6 +209,7 @@ type MutationResolver interface {
 	CancelOrder(ctx context.Context, id string, reason *string) (bool, error)
 	UpdateOrderStatus(ctx context.Context, id string, status OrderStatus) (*Order, error)
 	RefundPayment(ctx context.Context, paymentID string, reason string) (*Payment, error)
+	ConfirmPayment(ctx context.Context, orderID string, razorpayPaymentID string, razorpaySignature string) (*Payment, error)
 }
 type QueryResolver interface {
 	Me(ctx context.Context) (*User, error)
@@ -272,6 +284,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.ChangePassword(childComplexity, args["oldPassword"].(string), args["newPassword"].(string)), true
+	case "Mutation.confirmPayment":
+		if e.complexity.Mutation.ConfirmPayment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_confirmPayment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ConfirmPayment(childComplexity, args["orderId"].(string), args["razorpayPaymentId"].(string), args["razorpaySignature"].(string)), true
 	case "Mutation.createOrder":
 		if e.complexity.Mutation.CreateOrder == nil {
 			break
@@ -603,6 +626,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Payment.AmountCents(childComplexity), true
+	case "Payment.checkout":
+		if e.complexity.Payment.Checkout == nil {
+			break
+		}
+
+		return e.complexity.Payment.Checkout(childComplexity), true
 	case "Payment.createdAt":
 		if e.complexity.Payment.CreatedAt == nil {
 			break
@@ -639,6 +668,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Payment.OrderID(childComplexity), true
+	case "Payment.provider":
+		if e.complexity.Payment.Provider == nil {
+			break
+		}
+
+		return e.complexity.Payment.Provider(childComplexity), true
+	case "Payment.providerOrderId":
+		if e.complexity.Payment.ProviderOrderID == nil {
+			break
+		}
+
+		return e.complexity.Payment.ProviderOrderID(childComplexity), true
 	case "Payment.providerRef":
 		if e.complexity.Payment.ProviderRef == nil {
 			break
@@ -880,6 +921,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.SearchProducts(childComplexity, args["query"].(string), args["page"].(*int32), args["pageSize"].(*int32)), true
+
+	case "RazorpayCheckout.amountCents":
+		if e.complexity.RazorpayCheckout.AmountCents == nil {
+			break
+		}
+
+		return e.complexity.RazorpayCheckout.AmountCents(childComplexity), true
+	case "RazorpayCheckout.currency":
+		if e.complexity.RazorpayCheckout.Currency == nil {
+			break
+		}
+
+		return e.complexity.RazorpayCheckout.Currency(childComplexity), true
+	case "RazorpayCheckout.keyId":
+		if e.complexity.RazorpayCheckout.KeyID == nil {
+			break
+		}
+
+		return e.complexity.RazorpayCheckout.KeyID(childComplexity), true
+	case "RazorpayCheckout.orderId":
+		if e.complexity.RazorpayCheckout.OrderID == nil {
+			break
+		}
+
+		return e.complexity.RazorpayCheckout.OrderID(childComplexity), true
 
 	case "User.createdAt":
 		if e.complexity.User.CreatedAt == nil {
@@ -1151,8 +1217,25 @@ type Payment {
   method: String!
   providerRef: String!
   failureReason: String!
+  "mock or razorpay."
+  provider: String!
+  "The Razorpay order ID; empty for the mock provider."
+  providerOrderId: String!
+  "What the client needs to open Razorpay Checkout. Set only while a Razorpay payment is PENDING."
+  checkout: RazorpayCheckout
   createdAt: Time
   updatedAt: Time
+}
+
+"Options for Razorpay Checkout (https://checkout.razorpay.com/v1/checkout.js)."
+type RazorpayCheckout {
+  "The public key ID, passed to Checkout as key."
+  keyId: String!
+  "The Razorpay order ID, passed to Checkout as order_id."
+  orderId: String!
+  "Passed to Checkout as amount (paise for INR)."
+  amountCents: Money!
+  currency: String!
 }
 
 type PaymentPage {
@@ -1267,6 +1350,12 @@ type Mutation {
 
   "Admin only."
   refundPayment(paymentId: ID!, reason: String!): Payment!
+
+  """
+  Completes a Razorpay payment with the values Checkout passes to its handler. Returns NOT_FOUND
+  unless the order belongs to the caller, and BAD_USER_INPUT if the signature does not verify.
+  """
+  confirmPayment(orderId: ID!, razorpayPaymentId: String!, razorpaySignature: String!): Payment!
 }
 `, BuiltIn: false},
 }
@@ -1305,6 +1394,27 @@ func (ec *executionContext) field_Mutation_changePassword_args(ctx context.Conte
 		return nil, err
 	}
 	args["newPassword"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_confirmPayment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "orderId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["orderId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "razorpayPaymentId", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["razorpayPaymentId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "razorpaySignature", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["razorpaySignature"] = arg2
 	return args, nil
 }
 
@@ -2469,6 +2579,12 @@ func (ec *executionContext) fieldContext_Mutation_refundPayment(ctx context.Cont
 				return ec.fieldContext_Payment_providerRef(ctx, field)
 			case "failureReason":
 				return ec.fieldContext_Payment_failureReason(ctx, field)
+			case "provider":
+				return ec.fieldContext_Payment_provider(ctx, field)
+			case "providerOrderId":
+				return ec.fieldContext_Payment_providerOrderId(ctx, field)
+			case "checkout":
+				return ec.fieldContext_Payment_checkout(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Payment_createdAt(ctx, field)
 			case "updatedAt":
@@ -2485,6 +2601,77 @@ func (ec *executionContext) fieldContext_Mutation_refundPayment(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_refundPayment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_confirmPayment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_confirmPayment,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().ConfirmPayment(ctx, fc.Args["orderId"].(string), fc.Args["razorpayPaymentId"].(string), fc.Args["razorpaySignature"].(string))
+		},
+		nil,
+		ec.marshalNPayment2ᚖgithubᚗcomᚋUjjwaljain16ᚋEᚑcommerceᚑBackendᚋgraphqlᚋgraphᚐPayment,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_confirmPayment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Payment_id(ctx, field)
+			case "orderId":
+				return ec.fieldContext_Payment_orderId(ctx, field)
+			case "userId":
+				return ec.fieldContext_Payment_userId(ctx, field)
+			case "amountCents":
+				return ec.fieldContext_Payment_amountCents(ctx, field)
+			case "currency":
+				return ec.fieldContext_Payment_currency(ctx, field)
+			case "status":
+				return ec.fieldContext_Payment_status(ctx, field)
+			case "method":
+				return ec.fieldContext_Payment_method(ctx, field)
+			case "providerRef":
+				return ec.fieldContext_Payment_providerRef(ctx, field)
+			case "failureReason":
+				return ec.fieldContext_Payment_failureReason(ctx, field)
+			case "provider":
+				return ec.fieldContext_Payment_provider(ctx, field)
+			case "providerOrderId":
+				return ec.fieldContext_Payment_providerOrderId(ctx, field)
+			case "checkout":
+				return ec.fieldContext_Payment_checkout(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Payment_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Payment_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Payment", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_confirmPayment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -3734,6 +3921,103 @@ func (ec *executionContext) fieldContext_Payment_failureReason(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Payment_provider(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Payment_provider,
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Payment_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Payment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Payment_providerOrderId(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Payment_providerOrderId,
+		func(ctx context.Context) (any, error) {
+			return obj.ProviderOrderID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Payment_providerOrderId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Payment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Payment_checkout(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Payment_checkout,
+		func(ctx context.Context) (any, error) {
+			return obj.Checkout, nil
+		},
+		nil,
+		ec.marshalORazorpayCheckout2ᚖgithubᚗcomᚋUjjwaljain16ᚋEᚑcommerceᚑBackendᚋgraphqlᚋgraphᚐRazorpayCheckout,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Payment_checkout(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Payment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "keyId":
+				return ec.fieldContext_RazorpayCheckout_keyId(ctx, field)
+			case "orderId":
+				return ec.fieldContext_RazorpayCheckout_orderId(ctx, field)
+			case "amountCents":
+				return ec.fieldContext_RazorpayCheckout_amountCents(ctx, field)
+			case "currency":
+				return ec.fieldContext_RazorpayCheckout_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type RazorpayCheckout", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Payment_createdAt(ctx context.Context, field graphql.CollectedField, obj *Payment) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3834,6 +4118,12 @@ func (ec *executionContext) fieldContext_PaymentPage_items(_ context.Context, fi
 				return ec.fieldContext_Payment_providerRef(ctx, field)
 			case "failureReason":
 				return ec.fieldContext_Payment_failureReason(ctx, field)
+			case "provider":
+				return ec.fieldContext_Payment_provider(ctx, field)
+			case "providerOrderId":
+				return ec.fieldContext_Payment_providerOrderId(ctx, field)
+			case "checkout":
+				return ec.fieldContext_Payment_checkout(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Payment_createdAt(ctx, field)
 			case "updatedAt":
@@ -4782,6 +5072,12 @@ func (ec *executionContext) fieldContext_Query_paymentForOrder(ctx context.Conte
 				return ec.fieldContext_Payment_providerRef(ctx, field)
 			case "failureReason":
 				return ec.fieldContext_Payment_failureReason(ctx, field)
+			case "provider":
+				return ec.fieldContext_Payment_provider(ctx, field)
+			case "providerOrderId":
+				return ec.fieldContext_Payment_providerOrderId(ctx, field)
+			case "checkout":
+				return ec.fieldContext_Payment_checkout(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Payment_createdAt(ctx, field)
 			case "updatedAt":
@@ -5009,6 +5305,122 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RazorpayCheckout_keyId(ctx context.Context, field graphql.CollectedField, obj *RazorpayCheckout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RazorpayCheckout_keyId,
+		func(ctx context.Context) (any, error) {
+			return obj.KeyID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RazorpayCheckout_keyId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RazorpayCheckout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RazorpayCheckout_orderId(ctx context.Context, field graphql.CollectedField, obj *RazorpayCheckout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RazorpayCheckout_orderId,
+		func(ctx context.Context) (any, error) {
+			return obj.OrderID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RazorpayCheckout_orderId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RazorpayCheckout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RazorpayCheckout_amountCents(ctx context.Context, field graphql.CollectedField, obj *RazorpayCheckout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RazorpayCheckout_amountCents,
+		func(ctx context.Context) (any, error) {
+			return obj.AmountCents, nil
+		},
+		nil,
+		ec.marshalNMoney2int64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RazorpayCheckout_amountCents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RazorpayCheckout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Money does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RazorpayCheckout_currency(ctx context.Context, field graphql.CollectedField, obj *RazorpayCheckout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RazorpayCheckout_currency,
+		func(ctx context.Context) (any, error) {
+			return obj.Currency, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RazorpayCheckout_currency(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RazorpayCheckout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -7156,6 +7568,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "confirmPayment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_confirmPayment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7556,6 +7975,18 @@ func (ec *executionContext) _Payment(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "provider":
+			out.Values[i] = ec._Payment_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "providerOrderId":
+			out.Values[i] = ec._Payment_providerOrderId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "checkout":
+			out.Values[i] = ec._Payment_checkout(ctx, field, obj)
 		case "createdAt":
 			out.Values[i] = ec._Payment_createdAt(ctx, field, obj)
 		case "updatedAt":
@@ -8007,6 +8438,60 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var razorpayCheckoutImplementors = []string{"RazorpayCheckout"}
+
+func (ec *executionContext) _RazorpayCheckout(ctx context.Context, sel ast.SelectionSet, obj *RazorpayCheckout) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, razorpayCheckoutImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RazorpayCheckout")
+		case "keyId":
+			out.Values[i] = ec._RazorpayCheckout_keyId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "orderId":
+			out.Values[i] = ec._RazorpayCheckout_orderId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "amountCents":
+			out.Values[i] = ec._RazorpayCheckout_amountCents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currency":
+			out.Values[i] = ec._RazorpayCheckout_currency(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -9346,6 +9831,13 @@ func (ec *executionContext) marshalOProduct2ᚖgithubᚗcomᚋUjjwaljain16ᚋE�
 		return graphql.Null
 	}
 	return ec._Product(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalORazorpayCheckout2ᚖgithubᚗcomᚋUjjwaljain16ᚋEᚑcommerceᚑBackendᚋgraphqlᚋgraphᚐRazorpayCheckout(ctx context.Context, sel ast.SelectionSet, v *RazorpayCheckout) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._RazorpayCheckout(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {

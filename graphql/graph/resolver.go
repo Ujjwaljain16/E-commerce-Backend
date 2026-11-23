@@ -31,6 +31,26 @@ type Resolver struct {
 	PaymentSvc      paymentpb.PaymentServiceClient
 	NotificationSvc notificationpb.NotificationServiceClient
 	Tokens          TokenValidator
+	// RazorpayKeyID is the public Razorpay key handed to clients for Checkout. Never the secret.
+	RazorpayKeyID string
+}
+
+// payment converts p and, while a Razorpay checkout is waiting for the customer, adds what the
+// client needs to open it.
+func (r *Resolver) payment(p *paymentpb.Payment) *Payment {
+	out := toPayment(p)
+	if out == nil || r.RazorpayKeyID == "" {
+		return out
+	}
+	if p.GetProvider() == "razorpay" && p.GetStatus() == paymentpb.PaymentStatus_PAYMENT_STATUS_PENDING && p.GetProviderOrderId() != "" {
+		out.Checkout = &RazorpayCheckout{
+			KeyID:       r.RazorpayKeyID,
+			OrderID:     p.GetProviderOrderId(),
+			AmountCents: p.GetAmountCents(),
+			Currency:    p.GetCurrency(),
+		}
+	}
+	return out
 }
 
 // ownedOrder loads an order the caller is allowed to see. Orders belonging to

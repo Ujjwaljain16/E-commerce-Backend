@@ -99,8 +99,14 @@ type Payment struct {
 	Method        string        `json:"method"`
 	ProviderRef   string        `json:"providerRef"`
 	FailureReason string        `json:"failureReason"`
-	CreatedAt     *time.Time    `json:"createdAt,omitempty"`
-	UpdatedAt     *time.Time    `json:"updatedAt,omitempty"`
+	// mock or razorpay.
+	Provider string `json:"provider"`
+	// The Razorpay order ID; empty for the mock provider.
+	ProviderOrderID string `json:"providerOrderId"`
+	// What the client needs to open Razorpay Checkout. Set only while a Razorpay payment is PENDING.
+	Checkout  *RazorpayCheckout `json:"checkout,omitempty"`
+	CreatedAt *time.Time        `json:"createdAt,omitempty"`
+	UpdatedAt *time.Time        `json:"updatedAt,omitempty"`
 }
 
 type PaymentPage struct {
@@ -131,6 +137,17 @@ type ProductPage struct {
 }
 
 type Query struct {
+}
+
+// Options for Razorpay Checkout (https://checkout.razorpay.com/v1/checkout.js).
+type RazorpayCheckout struct {
+	// The public key ID, passed to Checkout as key.
+	KeyID string `json:"keyId"`
+	// The Razorpay order ID, passed to Checkout as order_id.
+	OrderID string `json:"orderId"`
+	// Passed to Checkout as amount (paise for INR).
+	AmountCents int64  `json:"amountCents"`
+	Currency    string `json:"currency"`
 }
 
 type RegisterInput struct {

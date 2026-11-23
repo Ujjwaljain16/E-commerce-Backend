@@ -103,8 +103,25 @@ type Payment {
   method: String!
   providerRef: String!
   failureReason: String!
+  "mock or razorpay."
+  provider: String!
+  "The Razorpay order ID; empty for the mock provider."
+  providerOrderId: String!
+  "What the client needs to open Razorpay Checkout. Set only while a Razorpay payment is PENDING."
+  checkout: RazorpayCheckout
   createdAt: Time
   updatedAt: Time
+}
+
+"Options for Razorpay Checkout (https://checkout.razorpay.com/v1/checkout.js)."
+type RazorpayCheckout {
+  "The public key ID, passed to Checkout as key."
+  keyId: String!
+  "The Razorpay order ID, passed to Checkout as order_id."
+  orderId: String!
+  "Passed to Checkout as amount (paise for INR)."
+  amountCents: Money!
+  currency: String!
 }
 
 type PaymentPage {
@@ -219,4 +236,10 @@ type Mutation {
 
   "Admin only."
   refundPayment(paymentId: ID!, reason: String!): Payment!
+
+  """
+  Completes a Razorpay payment with the values Checkout passes to its handler. Returns NOT_FOUND
+  unless the order belongs to the caller, and BAD_USER_INPUT if the signature does not verify.
+  """
+  confirmPayment(orderId: ID!, razorpayPaymentId: String!, razorpaySignature: String!): Payment!
 }
