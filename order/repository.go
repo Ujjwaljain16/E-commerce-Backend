@@ -7,8 +7,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/events"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/outbox"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
+
+// OutboxTable holds order events until the relay publishes them to Kafka.
+const OutboxTable = "order_outbox"
 
 var (
 	// ErrOrderNotFound is returned when an order is not found
@@ -64,7 +70,12 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*Order, error)
 	List(ctx context.Context, page, pageSize int, userID string, status OrderStatus) ([]*Order, int, error)
 	UpdateStatus(ctx context.Context, id string, status OrderStatus) (*Order, error)
-	Cancel(ctx context.Context, id string) error
+	// Cancel moves a PENDING or CONFIRMED order to CANCELLED and records an order.cancelled event.
+	Cancel(ctx context.Context, id, reason string) (*Order, error)
+	// ApplyPaymentResult confirms or cancels a PENDING order; applied is false if the order had already moved on.
+	ApplyPaymentResult(ctx context.Context, id string, succeeded bool, reason string) (applied bool, err error)
+	// MarkRefunded records that the order's payment was refunded.
+	MarkRefunded(ctx context.Context, id string) error
 	GetByUserID(ctx context.Context, userID string, page, pageSize int) ([]*Order, int, error)
 	Close() error
 }
@@ -91,8 +102,9 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 	}
 	defer tx.Rollback()
 
-	// Generate order ID
-	order.ID = uuid.New().String()
+	if order.ID == "" {
+		order.ID = uuid.New().String()
+	}
 	order.CreatedAt = time.Now()
 	order.UpdatedAt = time.Now()
 	order.Status = OrderStatusPending
@@ -149,6 +161,23 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 		}
 	}
 
+	created := events.OrderCreated{
+		Meta:          events.NewMeta(),
+		OrderID:       order.ID,
+		UserID:        order.UserID,
+		TotalAmount:   order.TotalAmount,
+		Currency:      "USD",
+		PaymentMethod: order.PaymentMethod,
+	}
+	for _, it := range order.Items {
+		created.Items = append(created.Items, events.OrderItem{
+			ProductID: it.ProductID, ProductName: it.ProductName, Quantity: int32(it.Quantity), Price: it.Price,
+		})
+	}
+	if err = outbox.Add(ctx, tx, OutboxTable, events.TopicOrderCreated, order.ID, created); err != nil {
+		return nil, err
+	}
+
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
@@ -159,6 +188,9 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 
 // GetByID retrieves an order by ID with its items
 func (r *repository) GetByID(ctx context.Context, id string) (*Order, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, ErrOrderNotFound
+	}
 	// Get order
 	orderQuery := `
 		SELECT id, user_id, status, total_amount, shipping_address, billing_address, payment_method, created_at, updated_at
@@ -349,14 +381,30 @@ func (r *repository) getOrderItems(ctx context.Context, orderID string) ([]Order
 	return items, nil
 }
 
-// UpdateStatus updates the status of an order
+// allowedFrom lists the statuses an order may move to each status from via UpdateStatus.
+// Cancellation and refunds have their own paths because they emit events.
+var allowedFrom = map[OrderStatus][]int64{ //nolint:gochecknoglobals // read-only lookup table
+	OrderStatusConfirmed:  {int64(OrderStatusPending)},
+	OrderStatusProcessing: {int64(OrderStatusConfirmed)},
+	OrderStatusShipped:    {int64(OrderStatusProcessing)},
+	OrderStatusDelivered:  {int64(OrderStatusShipped)},
+}
+
+// UpdateStatus moves an order forward along the fulfilment flow.
 func (r *repository) UpdateStatus(ctx context.Context, id string, status OrderStatus) (*Order, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, ErrOrderNotFound
+	}
+	from, ok := allowedFrom[status]
+	if !ok {
+		return nil, ErrInvalidStatus
+	}
 	query := `
 		UPDATE orders
 		SET status = $1, updated_at = $2
-		WHERE id = $3
+		WHERE id = $3 AND status = ANY($4)
 	`
-	result, err := r.db.ExecContext(ctx, query, status, time.Now(), id)
+	result, err := r.db.ExecContext(ctx, query, status, time.Now(), id, pq.Array(from))
 	if err != nil {
 		return nil, fmt.Errorf("failed to update order status: %w", err)
 	}
@@ -367,35 +415,13 @@ func (r *repository) UpdateStatus(ctx context.Context, id string, status OrderSt
 	}
 
 	if rowsAffected == 0 {
-		return nil, ErrOrderNotFound
+		if _, err := r.GetByID(ctx, id); err != nil {
+			return nil, err
+		}
+		return nil, ErrInvalidStatus
 	}
 
 	return r.GetByID(ctx, id)
-}
-
-// Cancel cancels an order by setting its status to cancelled
-func (r *repository) Cancel(ctx context.Context, id string) error {
-	// Check if order exists and is not already in a final state
-	order, err := r.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	if order.Status == OrderStatusCancelled || order.Status == OrderStatusDelivered || order.Status == OrderStatusRefunded {
-		return ErrInvalidStatus
-	}
-
-	query := `
-		UPDATE orders
-		SET status = $1, updated_at = $2
-		WHERE id = $3
-	`
-	_, err = r.db.ExecContext(ctx, query, OrderStatusCancelled, time.Now(), id)
-	if err != nil {
-		return fmt.Errorf("failed to cancel order: %w", err)
-	}
-
-	return nil
 }
 
 // GetByUserID retrieves all orders for a specific user with pagination

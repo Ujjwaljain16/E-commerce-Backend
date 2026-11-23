@@ -25,7 +25,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		postgres.WithInitScripts("migrations/001_create_orders_table.up.sql"),
+		postgres.WithInitScripts("migrations/001_create_orders_table.up.sql", "migrations/002_create_order_outbox.up.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -313,7 +313,7 @@ func TestCancel(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cancel order
-	err = repo.Cancel(ctx, createdOrder.ID)
+	_, err = repo.Cancel(ctx, createdOrder.ID, "test")
 	require.NoError(t, err)
 
 	// Verify cancellation
@@ -334,11 +334,11 @@ func TestCancelAlreadyCancelled(t *testing.T) {
 	createdOrder, err := repo.Create(ctx, order)
 	require.NoError(t, err)
 
-	err = repo.Cancel(ctx, createdOrder.ID)
+	_, err = repo.Cancel(ctx, createdOrder.ID, "test")
 	require.NoError(t, err)
 
 	// Try to cancel again
-	err = repo.Cancel(ctx, createdOrder.ID)
+	_, err = repo.Cancel(ctx, createdOrder.ID, "test")
 	assert.ErrorIs(t, err, ErrInvalidStatus)
 }
 
@@ -354,11 +354,13 @@ func TestCancelDeliveredOrder(t *testing.T) {
 	createdOrder, err := repo.Create(ctx, order)
 	require.NoError(t, err)
 
-	_, err = repo.UpdateStatus(ctx, createdOrder.ID, OrderStatusDelivered)
-	require.NoError(t, err)
+	for _, st := range []OrderStatus{OrderStatusConfirmed, OrderStatusProcessing, OrderStatusShipped, OrderStatusDelivered} {
+		_, err = repo.UpdateStatus(ctx, createdOrder.ID, st)
+		require.NoError(t, err)
+	}
 
 	// Try to cancel delivered order
-	err = repo.Cancel(ctx, createdOrder.ID)
+	_, err = repo.Cancel(ctx, createdOrder.ID, "test")
 	assert.ErrorIs(t, err, ErrInvalidStatus)
 }
 
