@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
@@ -84,9 +85,12 @@ func (s *Service) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*p
 	}
 
 	product, err := s.repo.GetByID(ctx, req.Id)
-	if err != nil {
-		s.log.Warn(ctx, "Product not found", map[string]interface{}{"product_id": req.Id})
+	if errors.Is(err, ErrProductNotFound) {
 		return nil, status.Error(codes.NotFound, "product not found")
+	}
+	if err != nil {
+		s.log.Error(ctx, "Failed to get product", map[string]interface{}{"error": err.Error(), "product_id": req.Id})
+		return nil, status.Error(codes.Internal, "failed to get product")
 	}
 
 	return &pb.GetProductResponse{
@@ -191,9 +195,12 @@ func (s *Service) DeleteProduct(ctx context.Context, req *pb.DeleteProductReques
 	}
 
 	err := s.repo.Delete(ctx, req.Id)
-	if err != nil {
-		s.log.Warn(ctx, "Failed to delete product", map[string]interface{}{"error": err.Error(), "product_id": req.Id})
+	if errors.Is(err, ErrProductNotFound) {
 		return nil, status.Error(codes.NotFound, "product not found")
+	}
+	if err != nil {
+		s.log.Error(ctx, "Failed to delete product", map[string]interface{}{"error": err.Error(), "product_id": req.Id})
+		return nil, status.Error(codes.Internal, "failed to delete product")
 	}
 
 	s.log.Info(ctx, "Product deleted successfully", map[string]interface{}{"product_id": req.Id})

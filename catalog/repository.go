@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,6 +36,9 @@ type Repository interface {
 	Update(ctx context.Context, product *Product) (*Product, error)
 	Delete(ctx context.Context, id string) error
 	Search(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
+	ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
+	// ReleaseStock returns the IDs of products whose stock was put back (empty if nothing was reserved).
+	ReleaseStock(ctx context.Context, orderID string) ([]string, error)
 	Close() error
 }
 
@@ -124,9 +128,9 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 		&product.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if err == sql.ErrNoRows || isInvalidID(err) {
 		r.log.Warn(ctx, "Product not found", map[string]interface{}{"product_id": id})
-		return nil, fmt.Errorf("product not found")
+		return nil, ErrProductNotFound
 	}
 
 	if err != nil {
@@ -327,6 +331,9 @@ func (r *postgresRepository) Delete(ctx context.Context, id string) error {
 	query := "DELETE FROM products WHERE id = $1"
 
 	result, err := r.db.ExecContext(ctx, query, id)
+	if isInvalidID(err) {
+		return ErrProductNotFound
+	}
 	if err != nil {
 		r.log.Error(ctx, "Failed to delete product", map[string]interface{}{"error": err.Error(), "product_id": id})
 		return fmt.Errorf("failed to delete product: %w", err)
@@ -340,7 +347,7 @@ func (r *postgresRepository) Delete(ctx context.Context, id string) error {
 
 	if rows == 0 {
 		r.log.Warn(ctx, "Product not found for deletion", map[string]interface{}{"product_id": id})
-		return fmt.Errorf("product not found")
+		return ErrProductNotFound
 	}
 
 	r.log.Info(ctx, "Product deleted successfully", map[string]interface{}{"product_id": id})
@@ -360,17 +367,17 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 	}
 
 	offset := (page - 1) * pageSize
-	searchPattern := "%" + strings.ToLower(query) + "%"
+	query = strings.TrimSpace(query)
 
-	// Count total matching products
+	// Full-text search on the weighted search_vector column (name ranks above description).
 	countQuery := `
 		SELECT COUNT(*)
 		FROM products
-		WHERE LOWER(name) LIKE $1 OR LOWER(description) LIKE $1
+		WHERE search_vector @@ websearch_to_tsquery('english', $1)
 	`
 
 	var total int32
-	err := r.db.QueryRowContext(ctx, countQuery, searchPattern).Scan(&total)
+	err := r.db.QueryRowContext(ctx, countQuery, query).Scan(&total)
 	if err != nil {
 		r.log.Error(ctx, "Failed to count search results", map[string]interface{}{"error": err.Error()})
 		return nil, 0, fmt.Errorf("failed to count search results: %w", err)
@@ -380,12 +387,12 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 	searchQuery := `
 		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
 		FROM products
-		WHERE LOWER(name) LIKE $1 OR LOWER(description) LIKE $1
-		ORDER BY created_at DESC
+		WHERE search_vector @@ websearch_to_tsquery('english', $1)
+		ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC, created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, searchQuery, searchPattern, pageSize, offset)
+	rows, err := r.db.QueryContext(ctx, searchQuery, query, pageSize, offset)
 	if err != nil {
 		r.log.Error(ctx, "Failed to search products", map[string]interface{}{"error": err.Error()})
 		return nil, 0, fmt.Errorf("failed to search products: %w", err)
@@ -430,4 +437,10 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 // Close closes the database connection
 func (r *postgresRepository) Close() error {
 	return r.db.Close()
+}
+
+// isInvalidID reports a malformed UUID, which callers should treat the same as a missing product.
+func isInvalidID(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "22P02"
 }

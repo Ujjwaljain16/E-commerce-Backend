@@ -399,7 +399,7 @@ func TestSearch(t *testing.T) {
 	query := "test"
 	page := int32(1)
 	pageSize := int32(10)
-	searchPattern := "%test%"
+	searchPattern := "test"
 
 	countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM products WHERE`).

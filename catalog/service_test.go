@@ -21,7 +21,23 @@ type MockRepository struct {
 	UpdateFunc   func(ctx context.Context, product *Product) (*Product, error)
 	DeleteFunc   func(ctx context.Context, id string) error
 	SearchFunc   func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
+	ReserveFunc  func(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
+	ReleaseFunc  func(ctx context.Context, orderID string) ([]string, error)
 	CloseFunc    func() error
+}
+
+func (m *MockRepository) ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error) {
+	if m.ReserveFunc != nil {
+		return m.ReserveFunc(ctx, orderID, items)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ReleaseStock(ctx context.Context, orderID string) ([]string, error) {
+	if m.ReleaseFunc != nil {
+		return m.ReleaseFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (m *MockRepository) Create(ctx context.Context, product *Product) (*Product, error) {
@@ -321,7 +337,7 @@ func TestGetProduct_MissingID(t *testing.T) {
 func TestGetProduct_NotFound(t *testing.T) {
 	mockRepo := &MockRepository{
 		GetByIDFunc: func(ctx context.Context, id string) (*Product, error) {
-			return nil, errors.New("not found")
+			return nil, ErrProductNotFound
 		},
 	}
 
@@ -563,7 +579,7 @@ func TestDeleteProduct_MissingID(t *testing.T) {
 func TestDeleteProduct_NotFound(t *testing.T) {
 	mockRepo := &MockRepository{
 		DeleteFunc: func(ctx context.Context, id string) error {
-			return errors.New("not found")
+			return ErrProductNotFound
 		},
 	}
 
