@@ -106,18 +106,13 @@ go mod download
 
 2. **Generate Protobuf code:**
 ```bash
-protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    catalog/catalog.proto
+make proto-gen   # buf generate, from the repo root; generated code is committed, so this is only needed after proto changes
 ```
 
 3. **Set up database:**
 ```bash
-# Create database
+# Create the database; the service applies its migrations on startup
 createdb ecommerce
-
-# Run migrations
-psql ecommerce < catalog/migrations/001_create_products_table.up.sql
 ```
 
 ### Configuration
@@ -253,7 +248,7 @@ Available at `http://localhost:9091/metrics`
 
 ### Adding New Features
 1. Update `catalog.proto` with new RPC methods/messages
-2. Regenerate code: `protoc --go_out=. --go-grpc_out=. catalog/catalog.proto`
+2. Regenerate code: `make proto-gen`
 3. Implement in `service.go` with validation
 4. Add repository methods if needed in `repository.go`
 5. Write tests in `*_test.go`

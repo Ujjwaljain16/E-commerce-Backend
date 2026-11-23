@@ -1,3 +1,5 @@
+``WORK IN PROGRESS ``
+
 # E-Commerce Microservices Platform
 
 A distributed e-commerce backend in Go: six services talking gRPC, an event-driven checkout saga over Kafka, a GraphQL gateway, and the Docker/Kubernetes/CI setup to run it.

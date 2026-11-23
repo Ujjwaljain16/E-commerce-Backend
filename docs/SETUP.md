@@ -1,48 +1,43 @@
-# Development Tools Installation Guide
+# Development Setup
 
-## Prerequisites
+## Required
 
-### 1. Protocol Buffers Compiler (protoc)
-```powershell
-# Install via winget (Windows)
-winget install --id Google.Protobuf -e
+- **Go 1.26+** (`go.mod` pins the toolchain; older Go versions download it automatically).
+- **Docker** with Compose, for the local stack, integration tests (testcontainers) and image builds.
 
-# Verify installation
-protoc --version
-```
+## Protobuf code generation
 
-### 2. Go Protobuf Plugins
+Generated code is committed, so you only need this when you change a `.proto` file. The repo uses
+[buf](https://buf.build) instead of `protoc`:
+
 ```bash
-# Install code generators
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-# Verify installation
-protoc-gen-go --version
-protoc-gen-go-grpc --version
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.0
+make proto-gen          # runs buf generate (buf.yaml / buf.gen.yaml at the repo root)
 ```
 
-### 3. golangci-lint
-```powershell
-# Install via go
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+CI regenerates the code and fails if the committed files are out of date.
 
-# Verify installation
-golangci-lint version
-```
+## GraphQL code generation
 
-## Environment Setup
+After changing `graphql/schema.graphql`, run from `graphql/`:
 
-### Add Go bin to PATH
-```powershell
-# PowerShell (add to profile for persistence)
-$env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-```
-
-## Verify Setup
 ```bash
-# Run from project root
-make proto-gen  # Generate protobuf code
-make test       # Run tests
-make lint       # Run linter
+GOFLAGS=-mod=mod go run github.com/99designs/gqlgen@v0.17.84 generate
 ```
+
+then restore `go.mod`/`go.sum` if gqlgen touched them (its code generator needs modules the app doesn't).
+
+## Linting
+
+`make lint` runs gofmt, `go vet` and staticcheck, the same checks as CI.
+
+## Optional
+
+- **kubectl** and **minikube** to try the Kubernetes manifests (see "Run on minikube" in the README).
+- **grpcurl** to call services directly (see [TESTING.md](TESTING.md)).
+
+## Running
+
+See the README: `docker compose up -d --build` starts everything, `make test`, `make integration-test`,
+`make e2e` and `make load` cover testing.

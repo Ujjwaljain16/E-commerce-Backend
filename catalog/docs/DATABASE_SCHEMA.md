@@ -68,11 +68,52 @@ CREATE INDEX idx_products_name ON products(name);
 | `idx_products_category` | category | Efficiently filter products by category |
 | `idx_products_name` | name | Support product name search queries |
 
+### Full-text search
+
+`products.search_vector` is a generated `tsvector` column: the name is weighted `A`, the description `B`. A GIN index (`idx_products_search_vector`) serves `SearchProducts`, which matches with `websearch_to_tsquery('english', $1)` and orders by `ts_rank`.
+
+### stock_reservations / stock_reservation_items
+
+One reservation per order, holding the stock and the price each item was sold at.
+
+```sql
+CREATE TABLE stock_reservations (
+    order_id UUID PRIMARY KEY,
+    status VARCHAR(20) NOT NULL,   -- RESERVED, COMMITTED, RELEASED, EXPIRED
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE stock_reservation_items (
+    order_id UUID NOT NULL REFERENCES stock_reservations(order_id) ON DELETE CASCADE,
+    product_id UUID NOT NULL,
+    product_name VARCHAR(255) NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price_cents BIGINT NOT NULL CHECK (unit_price_cents >= 0),
+    PRIMARY KEY (order_id, product_id)
+);
+```
+
+| Status | Meaning |
+|--------|---------|
+| `RESERVED` | Stock taken by `ReserveStock`; the order's `order.created` event has not arrived yet |
+| `COMMITTED` | `order.created` arrived, so the order exists |
+| `RELEASED` | The order was cancelled and the stock returned |
+| `EXPIRED` | No `order.created` within `RESERVATION_TTL` (default 15m), so the order failed to save; the sweeper returned the stock. A late `order.created` re-reserves if stock allows |
+
+Every transition is a guarded `UPDATE ... WHERE status = ...`, so retries and redelivered events are harmless. Rows are locked in product-id order to avoid deadlocks between concurrent orders.
+
 ## Migration History
+
+Migrations are embedded in the binary and applied at startup; applied versions are tracked in `catalog_schema_migrations`.
 
 | Migration | File | Description |
 |-----------|------|-------------|
 | 001 | `001_create_products_table.up.sql` | Initial table creation with all fields and indexes |
+| 002 | `002_create_stock_reservations.up.sql` | Per-order stock reservations |
+| 003 | `003_add_product_search_vector.up.sql` | Weighted `tsvector` column and GIN index for search |
+| 004 | `004_reservation_lifecycle.up.sql` | `COMMITTED`/`EXPIRED` statuses and the sweeper index |
+| 005 | `005_prices_in_cents.up.sql` | Prices stored as integer cents |
 
 ## Data Types and Formats
 
@@ -129,12 +170,12 @@ ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 ```
 
-### Search Products by Name
+### Search Products
 ```sql
 SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 FROM products
-WHERE name ILIKE $1
-ORDER BY name
+WHERE search_vector @@ websearch_to_tsquery('english', $1)
+ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC, created_at DESC
 LIMIT $2 OFFSET $3;
 ```
 

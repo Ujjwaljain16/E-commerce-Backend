@@ -1,5 +1,8 @@
 # Manual Test Files
 
+Automated end-to-end tests live in `tests/e2e` (`make e2e`). `test-refreshtoken.json` needs a fresh
+refresh token each time, because refresh tokens are single use.
+
 This directory contains JSON files for manual testing of gRPC endpoints.
 
 ## Usage
