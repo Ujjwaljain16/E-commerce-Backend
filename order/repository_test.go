@@ -58,13 +58,13 @@ func createTestOrder(userID string) *Order {
 				ProductID:   "550e8400-e29b-41d4-a716-446655440001",
 				ProductName: "Test Product 1",
 				Quantity:    2,
-				Price:       29.99,
+				PriceCents:  2999,
 			},
 			{
 				ProductID:   "550e8400-e29b-41d4-a716-446655440002",
 				ProductName: "Test Product 2",
 				Quantity:    1,
-				Price:       49.99,
+				PriceCents:  4999,
 			},
 		},
 		ShippingAddress: "123 Main St, City, State 12345",
@@ -87,11 +87,11 @@ func TestCreate(t *testing.T) {
 	assert.NotEmpty(t, createdOrder.ID)
 	assert.Equal(t, "650e8400-e29b-41d4-a716-446655440000", createdOrder.UserID)
 	assert.Equal(t, OrderStatusPending, createdOrder.Status)
-	assert.Equal(t, 109.97, createdOrder.TotalAmount) // 2*29.99 + 1*49.99
+	assert.Equal(t, int64(10997), createdOrder.TotalAmountCents) // 2*2999 + 1*4999
 	assert.Len(t, createdOrder.Items, 2)
 	assert.NotEmpty(t, createdOrder.Items[0].ID)
-	assert.Equal(t, 59.98, createdOrder.Items[0].Subtotal) // 2*29.99
-	assert.Equal(t, 49.99, createdOrder.Items[1].Subtotal) // 1*49.99
+	assert.Equal(t, int64(5998), createdOrder.Items[0].SubtotalCents) // 2*2999
+	assert.Equal(t, int64(4999), createdOrder.Items[1].SubtotalCents) // 1*4999
 }
 
 func TestCreateWithEmptyItems(t *testing.T) {
@@ -131,7 +131,7 @@ func TestGetByID(t *testing.T) {
 	assert.Equal(t, createdOrder.ID, retrievedOrder.ID)
 	assert.Equal(t, createdOrder.UserID, retrievedOrder.UserID)
 	assert.Equal(t, createdOrder.Status, retrievedOrder.Status)
-	assert.Equal(t, createdOrder.TotalAmount, retrievedOrder.TotalAmount)
+	assert.Equal(t, createdOrder.TotalAmountCents, retrievedOrder.TotalAmountCents)
 	assert.Len(t, retrievedOrder.Items, 2)
 }
 

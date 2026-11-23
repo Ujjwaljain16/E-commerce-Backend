@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/events"
@@ -23,6 +24,8 @@ var (
 	ErrInvalidStatus = errors.New("invalid order status")
 	// ErrEmptyOrderItems is returned when attempting to create an order without items
 	ErrEmptyOrderItems = errors.New("order must have at least one item")
+	// ErrTotalTooLarge is returned when a subtotal or the order total does not fit in int64 cents
+	ErrTotalTooLarge = errors.New("order total is too large")
 )
 
 // OrderStatus represents the state of an order
@@ -40,28 +43,28 @@ const (
 
 // OrderItem represents an item in an order
 type OrderItem struct {
-	ID          string
-	OrderID     string
-	ProductID   string
-	ProductName string
-	Quantity    int
-	Price       float64
-	Subtotal    float64
-	CreatedAt   time.Time
+	ID            string
+	OrderID       string
+	ProductID     string
+	ProductName   string
+	Quantity      int
+	PriceCents    int64
+	SubtotalCents int64
+	CreatedAt     time.Time
 }
 
 // Order represents a customer order
 type Order struct {
-	ID              string
-	UserID          string
-	Status          OrderStatus
-	Items           []OrderItem
-	TotalAmount     float64
-	ShippingAddress string
-	BillingAddress  string
-	PaymentMethod   string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID               string
+	UserID           string
+	Status           OrderStatus
+	Items            []OrderItem
+	TotalAmountCents int64
+	ShippingAddress  string
+	BillingAddress   string
+	PaymentMethod    string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Repository defines the interface for order data operations
@@ -94,6 +97,9 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 	if len(order.Items) == 0 {
 		return nil, ErrEmptyOrderItems
 	}
+	if err := priceOrder(order); err != nil {
+		return nil, err
+	}
 
 	// Start transaction
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -109,23 +115,16 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 	order.UpdatedAt = time.Now()
 	order.Status = OrderStatusPending
 
-	// Calculate total amount
-	order.TotalAmount = 0
-	for i := range order.Items {
-		order.Items[i].Subtotal = float64(order.Items[i].Quantity) * order.Items[i].Price
-		order.TotalAmount += order.Items[i].Subtotal
-	}
-
 	// Insert order
 	orderQuery := `
-		INSERT INTO orders (id, user_id, status, total_amount, shipping_address, billing_address, payment_method, created_at, updated_at)
+		INSERT INTO orders (id, user_id, status, total_amount_cents, shipping_address, billing_address, payment_method, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err = tx.ExecContext(ctx, orderQuery,
 		order.ID,
 		order.UserID,
 		order.Status,
-		order.TotalAmount,
+		order.TotalAmountCents,
 		order.ShippingAddress,
 		order.BillingAddress,
 		order.PaymentMethod,
@@ -138,7 +137,7 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 
 	// Insert order items
 	itemQuery := `
-		INSERT INTO order_items (id, order_id, product_id, product_name, quantity, price, subtotal, created_at)
+		INSERT INTO order_items (id, order_id, product_id, product_name, quantity, price_cents, subtotal_cents, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	for i := range order.Items {
@@ -152,8 +151,8 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 			order.Items[i].ProductID,
 			order.Items[i].ProductName,
 			order.Items[i].Quantity,
-			order.Items[i].Price,
-			order.Items[i].Subtotal,
+			order.Items[i].PriceCents,
+			order.Items[i].SubtotalCents,
 			order.Items[i].CreatedAt,
 		)
 		if err != nil {
@@ -162,16 +161,16 @@ func (r *repository) Create(ctx context.Context, order *Order) (*Order, error) {
 	}
 
 	created := events.OrderCreated{
-		Meta:          events.NewMeta(),
-		OrderID:       order.ID,
-		UserID:        order.UserID,
-		TotalAmount:   order.TotalAmount,
-		Currency:      "USD",
-		PaymentMethod: order.PaymentMethod,
+		Meta:             events.NewMeta(),
+		OrderID:          order.ID,
+		UserID:           order.UserID,
+		TotalAmountCents: order.TotalAmountCents,
+		Currency:         "USD",
+		PaymentMethod:    order.PaymentMethod,
 	}
 	for _, it := range order.Items {
 		created.Items = append(created.Items, events.OrderItem{
-			ProductID: it.ProductID, ProductName: it.ProductName, Quantity: int32(it.Quantity), Price: it.Price,
+			ProductID: it.ProductID, ProductName: it.ProductName, Quantity: int32(it.Quantity), PriceCents: it.PriceCents,
 		})
 	}
 	if err = outbox.Add(ctx, tx, OutboxTable, events.TopicOrderCreated, order.ID, created); err != nil {
@@ -193,7 +192,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Order, error) {
 	}
 	// Get order
 	orderQuery := `
-		SELECT id, user_id, status, total_amount, shipping_address, billing_address, payment_method, created_at, updated_at
+		SELECT id, user_id, status, total_amount_cents, shipping_address, billing_address, payment_method, created_at, updated_at
 		FROM orders
 		WHERE id = $1
 	`
@@ -202,7 +201,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Order, error) {
 		&order.ID,
 		&order.UserID,
 		&order.Status,
-		&order.TotalAmount,
+		&order.TotalAmountCents,
 		&order.ShippingAddress,
 		&order.BillingAddress,
 		&order.PaymentMethod,
@@ -218,7 +217,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Order, error) {
 
 	// Get order items
 	itemsQuery := `
-		SELECT id, order_id, product_id, product_name, quantity, price, subtotal, created_at
+		SELECT id, order_id, product_id, product_name, quantity, price_cents, subtotal_cents, created_at
 		FROM order_items
 		WHERE order_id = $1
 		ORDER BY created_at
@@ -238,8 +237,8 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Order, error) {
 			&item.ProductID,
 			&item.ProductName,
 			&item.Quantity,
-			&item.Price,
-			&item.Subtotal,
+			&item.PriceCents,
+			&item.SubtotalCents,
 			&item.CreatedAt,
 		)
 		if err != nil {
@@ -267,7 +266,7 @@ func (r *repository) List(ctx context.Context, page, pageSize int, userID string
 
 	// Build query with optional filters
 	query := `
-		SELECT id, user_id, status, total_amount, shipping_address, billing_address, payment_method, created_at, updated_at
+		SELECT id, user_id, status, total_amount_cents, shipping_address, billing_address, payment_method, created_at, updated_at
 		FROM orders
 		WHERE 1=1
 	`
@@ -314,7 +313,7 @@ func (r *repository) List(ctx context.Context, page, pageSize int, userID string
 			&order.ID,
 			&order.UserID,
 			&order.Status,
-			&order.TotalAmount,
+			&order.TotalAmountCents,
 			&order.ShippingAddress,
 			&order.BillingAddress,
 			&order.PaymentMethod,
@@ -344,7 +343,7 @@ func (r *repository) List(ctx context.Context, page, pageSize int, userID string
 // getOrderItems is a helper function to retrieve items for an order
 func (r *repository) getOrderItems(ctx context.Context, orderID string) ([]OrderItem, error) {
 	query := `
-		SELECT id, order_id, product_id, product_name, quantity, price, subtotal, created_at
+		SELECT id, order_id, product_id, product_name, quantity, price_cents, subtotal_cents, created_at
 		FROM order_items
 		WHERE order_id = $1
 		ORDER BY created_at
@@ -364,8 +363,8 @@ func (r *repository) getOrderItems(ctx context.Context, orderID string) ([]Order
 			&item.ProductID,
 			&item.ProductName,
 			&item.Quantity,
-			&item.Price,
-			&item.Subtotal,
+			&item.PriceCents,
+			&item.SubtotalCents,
 			&item.CreatedAt,
 		)
 		if err != nil {
@@ -432,4 +431,27 @@ func (r *repository) GetByUserID(ctx context.Context, userID string, page, pageS
 // Close closes the database connection
 func (r *repository) Close() error {
 	return r.db.Close()
+}
+
+// priceOrder sets each item's subtotal (quantity * unit price) and the order total, all in integer
+// cents. It refuses rather than wraps when a value would overflow int64.
+func priceOrder(order *Order) error {
+	var total int64
+	for i := range order.Items {
+		it := &order.Items[i]
+		if it.Quantity < 0 || it.PriceCents < 0 {
+			return fmt.Errorf("negative quantity or price for product %s", it.ProductID)
+		}
+		qty := int64(it.Quantity)
+		if qty != 0 && it.PriceCents > math.MaxInt64/qty {
+			return ErrTotalTooLarge
+		}
+		it.SubtotalCents = qty * it.PriceCents
+		if total > math.MaxInt64-it.SubtotalCents {
+			return ErrTotalTooLarge
+		}
+		total += it.SubtotalCents
+	}
+	order.TotalAmountCents = total
+	return nil
 }

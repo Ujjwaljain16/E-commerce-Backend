@@ -30,30 +30,31 @@ func NewMeta() Meta {
 }
 
 // OrderItem is a line item as priced by the catalog at reservation time.
+// Money is always an integer number of minor units (cents for USD), never a float.
 type OrderItem struct {
-	ProductID   string  `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	Quantity    int32   `json:"quantity"`
-	Price       float64 `json:"price"`
+	ProductID   string `json:"product_id"`
+	ProductName string `json:"product_name"`
+	Quantity    int32  `json:"quantity"`
+	PriceCents  int64  `json:"price_cents"`
 }
 
 // OrderCreated is published once an order and its stock reservation are committed.
 type OrderCreated struct {
 	Meta
-	OrderID       string      `json:"order_id"`
-	UserID        string      `json:"user_id"`
-	TotalAmount   float64     `json:"total_amount"`
-	Currency      string      `json:"currency"`
-	PaymentMethod string      `json:"payment_method"`
-	Items         []OrderItem `json:"items"`
+	OrderID          string      `json:"order_id"`
+	UserID           string      `json:"user_id"`
+	TotalAmountCents int64       `json:"total_amount_cents"`
+	Currency         string      `json:"currency"`
+	PaymentMethod    string      `json:"payment_method"`
+	Items            []OrderItem `json:"items"`
 }
 
 // OrderConfirmed is published when payment succeeded and the order moved to CONFIRMED.
 type OrderConfirmed struct {
 	Meta
-	OrderID     string  `json:"order_id"`
-	UserID      string  `json:"user_id"`
-	TotalAmount float64 `json:"total_amount"`
+	OrderID          string `json:"order_id"`
+	UserID           string `json:"user_id"`
+	TotalAmountCents int64  `json:"total_amount_cents"`
 }
 
 // OrderCancelled is published when an order is cancelled by the user or after a failed payment.
@@ -67,10 +68,10 @@ type OrderCancelled struct {
 // Payment is the payload of payment.succeeded, payment.failed and payment.refunded.
 type Payment struct {
 	Meta
-	PaymentID string  `json:"payment_id"`
-	OrderID   string  `json:"order_id"`
-	UserID    string  `json:"user_id"`
-	Amount    float64 `json:"amount"`
-	Currency  string  `json:"currency"`
-	Reason    string  `json:"reason,omitempty"`
+	PaymentID   string `json:"payment_id"`
+	OrderID     string `json:"order_id"`
+	UserID      string `json:"user_id"`
+	AmountCents int64  `json:"amount_cents"`
+	Currency    string `json:"currency"`
+	Reason      string `json:"reason,omitempty"`
 }

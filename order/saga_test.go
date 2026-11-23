@@ -32,7 +32,7 @@ func (f *fakeInventory) ReserveStock(_ context.Context, in *catalogpb.ReserveSto
 	resp := &catalogpb.ReserveStockResponse{}
 	for _, it := range in.Items {
 		resp.Items = append(resp.Items, &catalogpb.ReservedItem{
-			ProductId: it.ProductId, ProductName: "catalog name", Quantity: it.Quantity, UnitPrice: 25,
+			ProductId: it.ProductId, ProductName: "catalog name", Quantity: it.Quantity, UnitPriceCents: 2500,
 		})
 	}
 	return resp, nil
@@ -46,7 +46,7 @@ func (f *fakeInventory) ReleaseStock(_ context.Context, in *catalogpb.ReleaseSto
 func validCreateRequest() *pb.CreateOrderRequest {
 	return &pb.CreateOrderRequest{
 		UserId:          testUserID,
-		Items:           []*pb.OrderItemInput{{ProductId: "p1", Quantity: 2, Price: 0.01, ProductName: "client says cheap"}},
+		Items:           []*pb.OrderItemInput{{ProductId: "p1", Quantity: 2, PriceCents: 1, ProductName: "client says cheap"}},
 		ShippingAddress: "1 Main St",
 		PaymentMethod:   "card",
 	}
@@ -57,7 +57,7 @@ func TestCreateOrder_UsesCatalogPricesNotClientPrices(t *testing.T) {
 	var stored *Order
 	repo := &MockRepository{CreateFunc: func(_ context.Context, o *Order) (*Order, error) {
 		stored = o
-		o.TotalAmount = float64(o.Items[0].Quantity) * o.Items[0].Price
+		o.TotalAmountCents = int64(o.Items[0].Quantity) * o.Items[0].PriceCents
 		return o, nil
 	}}
 	svc := NewService(repo, inv, logger.New("test"))
@@ -66,11 +66,11 @@ func TestCreateOrder_UsesCatalogPricesNotClientPrices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Items[0].Price != 25 || stored.Items[0].ProductName != "catalog name" {
+	if stored.Items[0].PriceCents != 2500 || stored.Items[0].ProductName != "catalog name" {
 		t.Fatalf("expected catalog price/name, got %+v", stored.Items[0])
 	}
-	if resp.Order.TotalAmount != 50 {
-		t.Fatalf("expected total 50, got %v", resp.Order.TotalAmount)
+	if resp.Order.TotalAmountCents != 5000 {
+		t.Fatalf("expected total 5000, got %v", resp.Order.TotalAmountCents)
 	}
 	if inv.reserved.OrderId != stored.ID || stored.BillingAddress != "1 Main St" {
 		t.Fatalf("reservation and order should share an id and billing should default to shipping")
