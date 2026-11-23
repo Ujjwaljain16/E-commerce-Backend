@@ -2,124 +2,59 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"net"
-	"net/http"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/account"
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
-	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/metrics"
-	_ "github.com/lib/pq"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/reflection"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/server"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// Initialize logger
 	log := logger.New("account-service")
-	log.Info(ctx, "Starting Account Service", nil)
+	if err := run(ctx, log); err != nil {
+		log.Error(context.Background(), "account service stopped", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+}
 
-	// Get configuration from environment
+func run(ctx context.Context, log *logger.Logger) error {
 	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ecommerce?sslmode=disable")
-	jwtSecret := getEnv("JWT_SECRET", "your-secret-key-change-in-production")
 	port := getEnv("PORT", "50051")
 	metricsPort := getEnv("METRICS_PORT", "9090")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if len(jwtSecret) < 32 {
+		return errors.New("JWT_SECRET must be set and at least 32 characters long")
+	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", dbURL)
+	db, err := database.Open(ctx, dbURL)
 	if err != nil {
-		log.Error(ctx, "Failed to connect to database", map[string]interface{}{
-			"error": err.Error(),
-		})
-		os.Exit(1)
+		return err
 	}
 	defer db.Close()
-
-	// Test database connection
-	if err := db.Ping(); err != nil {
-		log.Error(ctx, "Failed to ping database", map[string]interface{}{
-			"error": err.Error(),
-		})
-		os.Exit(1)
+	if err := database.Migrate(ctx, db, account.Migrations, "migrations", "account_schema_migrations"); err != nil {
+		return err
 	}
-	log.Info(ctx, "Connected to database", nil)
+	log.Info(ctx, "database ready", nil)
 
-	// Create repository and service
-	repo := account.NewRepository(db)
-	service := account.NewService(repo, jwtSecret)
-
-	// Create gRPC server with metrics interceptor
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor("account-service")),
-	)
-	pb.RegisterAccountServiceServer(grpcServer, service)
-
-	// Register health check service
-	healthServer := health.NewServer()
-	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-	healthServer.SetServingStatus("account.AccountService", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-
-	// Enable reflection for grpcurl/grpcui
-	reflection.Register(grpcServer)
-
-	// Start Prometheus metrics HTTP server
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		metricsAddr := fmt.Sprintf(":%s", metricsPort)
-		log.Info(ctx, "Metrics server listening", map[string]interface{}{
-			"port": metricsPort,
-		})
-		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
-			log.Error(ctx, "Metrics server failed", map[string]interface{}{
-				"error": err.Error(),
-			})
+	service := account.NewService(account.NewRepository(db), jwtSecret)
+	if email, password := os.Getenv("ADMIN_EMAIL"), os.Getenv("ADMIN_PASSWORD"); email != "" {
+		if err := service.EnsureAdmin(ctx, email, password); err != nil {
+			return err
 		}
-	}()
-
-	// Start gRPC server
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
-	if err != nil {
-		log.Error(ctx, "Failed to listen", map[string]interface{}{
-			"error": err.Error(),
-			"port":  port,
-		})
-		os.Exit(1)
+		log.Info(ctx, "bootstrap admin ensured", map[string]interface{}{"email": email})
 	}
 
-	log.Info(ctx, "Account Service listening", map[string]interface{}{
-		"port":         port,
-		"metrics_port": metricsPort,
-	})
-
-	// Handle graceful shutdown
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		<-sigChan
-
-		log.Info(ctx, "Shutting down gracefully", nil)
-		grpcServer.GracefulStop()
-		repo.Close()
-	}()
-
-	// Start serving
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Error(ctx, "Failed to serve", map[string]interface{}{
-			"error": err.Error(),
-		})
-		os.Exit(1)
-	}
+	srv := server.New("account-service", log, port, metricsPort, db.PingContext)
+	pb.RegisterAccountServiceServer(srv.GRPC, service)
+	return srv.Run(ctx)
 }
 
 func getEnv(key, defaultValue string) string {
