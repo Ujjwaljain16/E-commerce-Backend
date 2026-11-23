@@ -21,7 +21,47 @@ type MockRepository struct {
 	UpdateFunc   func(ctx context.Context, product *Product) (*Product, error)
 	DeleteFunc   func(ctx context.Context, id string) error
 	SearchFunc   func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
+	ReserveFunc  func(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
+	ReleaseFunc  func(ctx context.Context, orderID string) ([]string, error)
+	CommitFunc   func(ctx context.Context, orderID string) ([]string, error)
+	ExpiredFunc  func(ctx context.Context, ttl time.Duration, limit int) ([]string, error)
+	ExpireFunc   func(ctx context.Context, orderID string) ([]string, error)
 	CloseFunc    func() error
+}
+
+func (m *MockRepository) CommitReservation(ctx context.Context, orderID string) ([]string, error) {
+	if m.CommitFunc != nil {
+		return m.CommitFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ExpiredReservations(ctx context.Context, ttl time.Duration, limit int) ([]string, error) {
+	if m.ExpiredFunc != nil {
+		return m.ExpiredFunc(ctx, ttl, limit)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ExpireReservation(ctx context.Context, orderID string) ([]string, error) {
+	if m.ExpireFunc != nil {
+		return m.ExpireFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error) {
+	if m.ReserveFunc != nil {
+		return m.ReserveFunc(ctx, orderID, items)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ReleaseStock(ctx context.Context, orderID string) ([]string, error) {
+	if m.ReleaseFunc != nil {
+		return m.ReleaseFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (m *MockRepository) Create(ctx context.Context, product *Product) (*Product, error) {
@@ -104,7 +144,7 @@ func TestCreateProduct_Success(t *testing.T) {
 	req := &pb.CreateProductRequest{
 		Name:        "Test Product",
 		Description: "Test Description",
-		Price:       99.99,
+		PriceCents:  9999,
 		Sku:         "TEST-001",
 		Stock:       10,
 		Images:      []string{"image1.jpg"},
@@ -136,10 +176,10 @@ func TestCreateProduct_MissingName(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
-		Name:  "",
-		Price: 99.99,
-		Sku:   "TEST-001",
-		Stock: 10,
+		Name:       "",
+		PriceCents: 9999,
+		Sku:        "TEST-001",
+		Stock:      10,
 	}
 
 	resp, err := service.CreateProduct(ctx, req)
@@ -164,10 +204,10 @@ func TestCreateProduct_MissingSKU(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
-		Name:  "Test Product",
-		Price: 99.99,
-		Sku:   "",
-		Stock: 10,
+		Name:       "Test Product",
+		PriceCents: 9999,
+		Sku:        "",
+		Stock:      10,
 	}
 
 	resp, err := service.CreateProduct(ctx, req)
@@ -192,10 +232,10 @@ func TestCreateProduct_InvalidPrice(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
-		Name:  "Test Product",
-		Price: -10.0,
-		Sku:   "TEST-001",
-		Stock: 10,
+		Name:       "Test Product",
+		PriceCents: -1000,
+		Sku:        "TEST-001",
+		Stock:      10,
 	}
 
 	_, err := service.CreateProduct(ctx, req)
@@ -210,16 +250,28 @@ func TestCreateProduct_InvalidPrice(t *testing.T) {
 	}
 }
 
+func TestCreateProduct_PriceOutOfRange(t *testing.T) {
+	service := setupService(&MockRepository{})
+	for _, cents := range []int64{0, maxPriceCents + 1} {
+		_, err := service.CreateProduct(context.Background(), &pb.CreateProductRequest{
+			Name: "Test Product", PriceCents: cents, Sku: "TEST-001", Stock: 1,
+		})
+		if status.Code(err) != codes.InvalidArgument {
+			t.Errorf("price_cents %d: expected InvalidArgument, got %v", cents, err)
+		}
+	}
+}
+
 func TestCreateProduct_NegativeStock(t *testing.T) {
 	mockRepo := &MockRepository{}
 	service := setupService(mockRepo)
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
-		Name:  "Test Product",
-		Price: 99.99,
-		Sku:   "TEST-001",
-		Stock: -5,
+		Name:       "Test Product",
+		PriceCents: 9999,
+		Sku:        "TEST-001",
+		Stock:      -5,
 	}
 
 	_, err := service.CreateProduct(ctx, req)
@@ -245,10 +297,10 @@ func TestCreateProduct_DuplicateSKU(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateProductRequest{
-		Name:  "Test Product",
-		Price: 99.99,
-		Sku:   "TEST-001",
-		Stock: 10,
+		Name:       "Test Product",
+		PriceCents: 9999,
+		Sku:        "TEST-001",
+		Stock:      10,
 	}
 
 	_, err := service.CreateProduct(ctx, req)
@@ -270,7 +322,7 @@ func TestGetProduct_Success(t *testing.T) {
 				ID:          id,
 				Name:        "Test Product",
 				Description: "Test Description",
-				Price:       99.99,
+				PriceCents:  9999,
 				SKU:         "TEST-001",
 				Stock:       10,
 				Images:      []string{"image1.jpg"},
@@ -321,7 +373,7 @@ func TestGetProduct_MissingID(t *testing.T) {
 func TestGetProduct_NotFound(t *testing.T) {
 	mockRepo := &MockRepository{
 		GetByIDFunc: func(ctx context.Context, id string) (*Product, error) {
-			return nil, errors.New("not found")
+			return nil, ErrProductNotFound
 		},
 	}
 
@@ -346,22 +398,22 @@ func TestListProducts_Success(t *testing.T) {
 		ListFunc: func(ctx context.Context, page, pageSize int32, category string) ([]*Product, int32, error) {
 			return []*Product{
 				{
-					ID:        "id1",
-					Name:      "Product 1",
-					Price:     99.99,
-					SKU:       "SKU-001",
-					Stock:     10,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					ID:         "id1",
+					Name:       "Product 1",
+					PriceCents: 9999,
+					SKU:        "SKU-001",
+					Stock:      10,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
 				},
 				{
-					ID:        "id2",
-					Name:      "Product 2",
-					Price:     149.99,
-					SKU:       "SKU-002",
-					Stock:     20,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					ID:         "id2",
+					Name:       "Product 2",
+					PriceCents: 14999,
+					SKU:        "SKU-002",
+					Stock:      20,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
 				},
 			}, 2, nil
 		},
@@ -442,7 +494,7 @@ func TestUpdateProduct_Success(t *testing.T) {
 		Id:          "test-id",
 		Name:        "Updated Product",
 		Description: "Updated Description",
-		Price:       199.99,
+		PriceCents:  19999,
 		Stock:       20,
 		Images:      []string{"new-image.jpg"},
 		Category:    "Electronics",
@@ -469,10 +521,10 @@ func TestUpdateProduct_MissingID(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.UpdateProductRequest{
-		Id:    "",
-		Name:  "Updated Product",
-		Price: 199.99,
-		Stock: 20,
+		Id:         "",
+		Name:       "Updated Product",
+		PriceCents: 19999,
+		Stock:      20,
 	}
 
 	_, err := service.UpdateProduct(ctx, req)
@@ -498,10 +550,10 @@ func TestUpdateProduct_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.UpdateProductRequest{
-		Id:    "non-existent",
-		Name:  "Updated Product",
-		Price: 199.99,
-		Stock: 20,
+		Id:         "non-existent",
+		Name:       "Updated Product",
+		PriceCents: 19999,
+		Stock:      20,
 	}
 
 	_, err := service.UpdateProduct(ctx, req)
@@ -563,7 +615,7 @@ func TestDeleteProduct_MissingID(t *testing.T) {
 func TestDeleteProduct_NotFound(t *testing.T) {
 	mockRepo := &MockRepository{
 		DeleteFunc: func(ctx context.Context, id string) error {
-			return errors.New("not found")
+			return ErrProductNotFound
 		},
 	}
 
@@ -588,13 +640,13 @@ func TestSearchProducts_Success(t *testing.T) {
 		SearchFunc: func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error) {
 			return []*Product{
 				{
-					ID:        "id1",
-					Name:      "Test Product",
-					Price:     99.99,
-					SKU:       "SKU-001",
-					Stock:     10,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					ID:         "id1",
+					Name:       "Test Product",
+					PriceCents: 9999,
+					SKU:        "SKU-001",
+					Stock:      10,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
 				},
 			}, 1, nil
 		},

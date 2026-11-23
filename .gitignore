@@ -49,3 +49,6 @@ build/
 
 # Test cache
 .testcache/
+
+# Local worktrees for parallel branches
+.worktrees/

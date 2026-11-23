@@ -3,11 +3,11 @@ package catalog
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 	_ "github.com/lib/pq"
 	"github.com/testcontainers/testcontainers-go"
@@ -70,41 +70,9 @@ func setupIntegrationTest(t *testing.T) (*Service, func()) {
 	return service, cleanup
 }
 
-// runMigrations applies database schema
+// runMigrations applies the same embedded migrations the service runs at startup.
 func runMigrations(db *sql.DB) error {
-	// Create products table
-	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS products (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			name VARCHAR(255) NOT NULL,
-			description TEXT,
-			price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
-			sku VARCHAR(100) UNIQUE NOT NULL,
-			stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
-			images TEXT[],
-			category VARCHAR(100),
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-	if _, err := db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create products table: %w", err)
-	}
-
-	// Create indexes
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);",
-		"CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);",
-		"CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);",
-	}
-
-	for _, indexSQL := range indexes {
-		if _, err := db.Exec(indexSQL); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	return nil
+	return database.Migrate(context.Background(), db, Migrations, "migrations", "catalog_schema_migrations")
 }
 
 func TestIntegration_CreateProduct(t *testing.T) {
@@ -120,7 +88,7 @@ func TestIntegration_CreateProduct(t *testing.T) {
 	req := &pb.CreateProductRequest{
 		Name:        "Integration Test Product",
 		Description: "Test Description",
-		Price:       99.99,
+		PriceCents:  9999,
 		Sku:         "INT-TEST-001",
 		Stock:       50,
 		Images:      []string{"image1.jpg", "image2.jpg"},
@@ -145,8 +113,8 @@ func TestIntegration_CreateProduct(t *testing.T) {
 		t.Errorf("Expected SKU %s, got %s", req.Sku, resp.Product.Sku)
 	}
 
-	if resp.Product.Price != req.Price {
-		t.Errorf("Expected price %f, got %f", req.Price, resp.Product.Price)
+	if resp.Product.PriceCents != req.PriceCents {
+		t.Errorf("Expected price %d, got %d", req.PriceCents, resp.Product.PriceCents)
 	}
 
 	if resp.Product.Stock != req.Stock {
@@ -170,11 +138,11 @@ func TestIntegration_CreateProduct_DuplicateSKU(t *testing.T) {
 
 	// Create first product
 	req := &pb.CreateProductRequest{
-		Name:     "Test Product",
-		Price:    99.99,
-		Sku:      "DUPLICATE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Test Product",
+		PriceCents: 9999,
+		Sku:        "DUPLICATE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	_, err := service.CreateProduct(ctx, req)
@@ -207,11 +175,11 @@ func TestIntegration_GetProduct(t *testing.T) {
 
 	// Create product first
 	createReq := &pb.CreateProductRequest{
-		Name:     "Test Get Product",
-		Price:    149.99,
-		Sku:      "GET-TEST-001",
-		Stock:    20,
-		Category: "Books",
+		Name:       "Test Get Product",
+		PriceCents: 14999,
+		Sku:        "GET-TEST-001",
+		Stock:      20,
+		Category:   "Books",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -259,11 +227,11 @@ func TestIntegration_ListProducts(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: p.category,
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   p.category,
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -315,11 +283,11 @@ func TestIntegration_ListProducts_WithCategory(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: p.category,
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   p.category,
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -361,11 +329,11 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 
 	// Create product
 	createReq := &pb.CreateProductRequest{
-		Name:     "Original Product",
-		Price:    99.99,
-		Sku:      "UPDATE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Original Product",
+		PriceCents: 9999,
+		Sku:        "UPDATE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -378,7 +346,7 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 		Id:          createResp.Product.Id,
 		Name:        "Updated Product",
 		Description: "Updated Description",
-		Price:       199.99,
+		PriceCents:  19999,
 		Stock:       20,
 		Images:      []string{"new-image.jpg"},
 		Category:    "Books",
@@ -394,8 +362,8 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 		t.Errorf("Expected name %s, got %s", updateReq.Name, updateResp.Product.Name)
 	}
 
-	if updateResp.Product.Price != updateReq.Price {
-		t.Errorf("Expected price %f, got %f", updateReq.Price, updateResp.Product.Price)
+	if updateResp.Product.PriceCents != updateReq.PriceCents {
+		t.Errorf("Expected price %d, got %d", updateReq.PriceCents, updateResp.Product.PriceCents)
 	}
 
 	if updateResp.Product.Stock != updateReq.Stock {
@@ -420,11 +388,11 @@ func TestIntegration_DeleteProduct(t *testing.T) {
 
 	// Create product
 	createReq := &pb.CreateProductRequest{
-		Name:     "Product to Delete",
-		Price:    99.99,
-		Sku:      "DELETE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Product to Delete",
+		PriceCents: 9999,
+		Sku:        "DELETE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -480,11 +448,11 @@ func TestIntegration_SearchProducts(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: "Electronics",
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   "Electronics",
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -515,5 +483,67 @@ func TestIntegration_SearchProducts(t *testing.T) {
 
 	if len(searchResp.Products) > 0 && searchResp.Products[0].Name != "Wireless Headphones" {
 		t.Errorf("Expected 'Wireless Headphones', got %s", searchResp.Products[0].Name)
+	}
+}
+
+func TestIntegration_ReservationExpiryAndLateCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+	service, cleanup := setupIntegrationTest(t)
+	defer cleanup()
+	ctx := context.Background()
+	repo := service.repo.(*postgresRepository)
+
+	created, err := service.CreateProduct(ctx, &pb.CreateProductRequest{Name: "Kettle", PriceCents: 3000, Sku: "EXP-1", Stock: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	productID := created.Product.Id
+	stock := func() int32 {
+		p, err := service.GetProduct(ctx, &pb.GetProductRequest{Id: productID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Product.Stock
+	}
+
+	orphan, lateOrder := "6b1f7d0e-0000-4000-8000-000000000001", "6b1f7d0e-0000-4000-8000-000000000002"
+	for _, id := range []string{orphan, lateOrder} {
+		if _, err := service.ReserveStock(ctx, &pb.ReserveStockRequest{OrderId: id, Items: []*pb.StockItem{{ProductId: productID, Quantity: 2}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := stock(); got != 1 {
+		t.Fatalf("after two reservations want stock 1, got %d", got)
+	}
+
+	if _, err := repo.db.ExecContext(ctx, `UPDATE stock_reservations SET created_at = NOW() - INTERVAL '1 hour'`); err != nil {
+		t.Fatal(err)
+	}
+	if n := NewReservationSweeper(repo, logger.New("test"), 15*time.Minute).SweepOnce(ctx); n != 2 {
+		t.Fatalf("expected 2 reservations expired, got %d", n)
+	}
+	if got := stock(); got != 5 {
+		t.Fatalf("expired reservations must return stock, got %d", got)
+	}
+
+	// The order for lateOrder did exist; its event just arrived late. It should win the stock back.
+	if _, err := repo.CommitReservation(ctx, lateOrder); err != nil {
+		t.Fatal(err)
+	}
+	if got := stock(); got != 3 {
+		t.Fatalf("late commit should re-reserve, want 3, got %d", got)
+	}
+	// Cancelling it afterwards releases it like any committed reservation.
+	if ids, err := repo.ReleaseStock(ctx, lateOrder); err != nil || len(ids) != 1 {
+		t.Fatalf("release committed reservation = %v, %v", ids, err)
+	}
+	if got := stock(); got != 5 {
+		t.Fatalf("want stock 5 after release, got %d", got)
+	}
+	// A second sweep finds nothing.
+	if n := NewReservationSweeper(repo, logger.New("test"), 15*time.Minute).SweepOnce(ctx); n != 0 {
+		t.Fatalf("second sweep released %d", n)
 	}
 }

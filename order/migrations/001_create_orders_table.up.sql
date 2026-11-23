@@ -40,6 +40,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger for orders table
+DROP TRIGGER IF EXISTS trigger_update_orders_updated_at ON orders;
 CREATE TRIGGER trigger_update_orders_updated_at
     BEFORE UPDATE ON orders
     FOR EACH ROW

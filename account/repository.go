@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -99,8 +100,8 @@ func (r *repository) Create(ctx context.Context, email, password, name, phone, r
 	)
 
 	if err != nil {
-		// Check for unique constraint violation
-		if err.Error() == "pq: duplicate key value violates unique constraint \"accounts_email_key\"" {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return nil, ErrEmailAlreadyExists
 		}
 		return nil, err

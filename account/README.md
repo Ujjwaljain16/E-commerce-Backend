@@ -21,7 +21,7 @@ The Account service provides user registration, authentication, profile manageme
 
 ## Tech Stack
 
-- **Language**: Go 1.24+
+- **Language**: Go 1.26+
 - **Database**: PostgreSQL 16
 - **Communication**: gRPC + Protocol Buffers
 - **Authentication**: JWT (HS256)
@@ -37,7 +37,7 @@ account/
 ├── account.proto          # gRPC service definition
 ├── service.go             # Business logic implementation
 ├── repository.go          # Database access layer
-├── server.go              # gRPC server setup
+├── tokens.go              # Refresh token store (rotation, revocation)
 ├── cmd/account/           # Main entry point
 ├── pb/                    # Generated protobuf code
 ├── migrations/            # Database migrations
@@ -52,40 +52,25 @@ account/
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.26 or higher
 - PostgreSQL 16
 - Docker (for integration tests)
 
 ### Environment Variables
 
-```bash
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=account_db
-
-# JWT
-JWT_SECRET=your-secret-key-change-in-production
-
-# Server
-GRPC_PORT=50051
-METRICS_PORT=9090
-```
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/ecommerce?sslmode=disable` | |
+| `JWT_SECRET` | none, required | At least 32 characters; the gateway must use the same value |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | unset | If set, this admin account is created on startup (registration only creates `USER`s) |
+| `PORT` | `50051` | gRPC |
+| `METRICS_PORT` | `9090` | `/metrics` and `/healthz` |
 
 ### Running Locally
 
 ```bash
-# Install dependencies
-go mod download
-
-# Run database migrations
-psql -U postgres -d account_db -f migrations/001_create_accounts_table.up.sql
-psql -U postgres -d account_db -f migrations/002_add_role_column.up.sql
-
-# Run the service
-go run cmd/account/main.go
+# Migrations run automatically on startup
+JWT_SECRET=local-dev-jwt-secret-change-me-0123456789 go run ./account/cmd/account
 ```
 
 ### Running with Docker
@@ -202,25 +187,20 @@ Available metrics:
 Regenerate protobuf code after modifying `account.proto`:
 
 ```bash
-protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    account/account.proto
+make proto-gen   # buf generate, from the repo root (see docs/SETUP.md)
 ```
 
 ### Database Migrations
 
 Create new migration:
 ```bash
-# Create migration files
-touch migrations/003_migration_name.up.sql
-touch migrations/003_migration_name.down.sql
-
-# Apply migration
-psql -U postgres -d account_db -f migrations/003_migration_name.up.sql
-
-# Rollback
-psql -U postgres -d account_db -f migrations/003_migration_name.down.sql
+# Add the next numbered pair; never edit a migration that has already been applied
+touch migrations/004_migration_name.up.sql
+touch migrations/004_migration_name.down.sql
 ```
+
+Migrations are embedded in the binary and applied automatically on startup (tracked in
+`account_schema_migrations`, serialised with an advisory lock). Down files are for manual rollback.
 
 ### Adding New Features
 

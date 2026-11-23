@@ -12,9 +12,9 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Create index for faster lookups
-CREATE INDEX idx_products_sku ON products(sku);
-CREATE INDEX idx_products_category ON products(category);
-CREATE INDEX idx_products_name ON products(name);
+CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 
 -- Create trigger to auto-update updated_at
 CREATE OR REPLACE FUNCTION update_products_updated_at()
@@ -25,6 +25,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_products_updated_at ON products;
 CREATE TRIGGER trigger_update_products_updated_at
     BEFORE UPDATE ON products
     FOR EACH ROW

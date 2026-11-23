@@ -246,3 +246,23 @@ func TestTokenService_SigningMethodValidation(t *testing.T) {
 		t.Errorf("expected ErrInvalidToken for wrong signing method, got %v", err)
 	}
 }
+
+func TestTokenService_TokenTypesAreNotInterchangeable(t *testing.T) {
+	ts := NewTokenService("secret", 15*time.Minute, 24*time.Hour)
+	access, refresh, err := ts.GenerateTokenPair("user123", "test@example.com", "USER")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.ValidateAccessToken(refresh); err != ErrWrongTokenType {
+		t.Fatalf("refresh token accepted as access token: %v", err)
+	}
+	if _, err := ts.ValidateRefreshToken(access); err != ErrWrongTokenType {
+		t.Fatalf("access token accepted as refresh token: %v", err)
+	}
+	if c, err := ts.ValidateAccessToken(access); err != nil || c.TokenType != TokenTypeAccess {
+		t.Fatalf("access token rejected: %v", err)
+	}
+	if c, err := ts.ValidateRefreshToken(refresh); err != nil || c.TokenType != TokenTypeRefresh {
+		t.Fatalf("refresh token rejected: %v", err)
+	}
+}

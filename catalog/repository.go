@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ type Product struct {
 	ID          string
 	Name        string
 	Description string
-	Price       float64
+	PriceCents  int64
 	SKU         string
 	Stock       int32
 	Images      []string
@@ -35,6 +36,13 @@ type Repository interface {
 	Update(ctx context.Context, product *Product) (*Product, error)
 	Delete(ctx context.Context, id string) error
 	Search(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
+	ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
+	// ReleaseStock returns the IDs of products whose stock was put back (empty if nothing was reserved).
+	ReleaseStock(ctx context.Context, orderID string) ([]string, error)
+	// CommitReservation marks a reservation as belonging to a created order (restoring it if it had expired).
+	CommitReservation(ctx context.Context, orderID string) ([]string, error)
+	ExpiredReservations(ctx context.Context, ttl time.Duration, limit int) ([]string, error)
+	ExpireReservation(ctx context.Context, orderID string) ([]string, error)
 	Close() error
 }
 
@@ -58,9 +66,9 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 	product.UpdatedAt = time.Now()
 
 	query := `
-		INSERT INTO products (id, name, description, price, sku, stock, images, category, created_at, updated_at)
+		INSERT INTO products (id, name, description, price_cents, sku, stock, images, category, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at
+		RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 	`
 
 	var images pq.StringArray
@@ -70,7 +78,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 		product.ID,
 		product.Name,
 		product.Description,
-		product.Price,
+		product.PriceCents,
 		product.SKU,
 		product.Stock,
 		pq.Array(product.Images),
@@ -81,7 +89,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -103,7 +111,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 // GetByID retrieves a product by ID
 func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, error) {
 	query := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
 		WHERE id = $1
 	`
@@ -115,7 +123,7 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -124,9 +132,9 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 		&product.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if err == sql.ErrNoRows || isInvalidID(err) {
 		r.log.Warn(ctx, "Product not found", map[string]interface{}{"product_id": id})
-		return nil, fmt.Errorf("product not found")
+		return nil, ErrProductNotFound
 	}
 
 	if err != nil {
@@ -141,7 +149,7 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 // GetBySKU retrieves a product by SKU
 func (r *postgresRepository) GetBySKU(ctx context.Context, sku string) (*Product, error) {
 	query := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
 		WHERE sku = $1
 	`
@@ -153,7 +161,7 @@ func (r *postgresRepository) GetBySKU(ctx context.Context, sku string) (*Product
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -197,7 +205,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 
 	if category != "" {
 		query = `
-			SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+			SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 			FROM products
 			WHERE category = $1
 			ORDER BY created_at DESC
@@ -207,7 +215,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 		args = []interface{}{category, pageSize, offset}
 	} else {
 		query = `
-			SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+			SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 			FROM products
 			ORDER BY created_at DESC
 			LIMIT $1 OFFSET $2
@@ -245,7 +253,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 			&product.ID,
 			&product.Name,
 			&product.Description,
-			&product.Price,
+			&product.PriceCents,
 			&product.SKU,
 			&product.Stock,
 			&images,
@@ -275,9 +283,9 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Product, error) {
 	query := `
 		UPDATE products
-		SET name = $1, description = $2, price = $3, stock = $4, images = $5, category = $6, updated_at = $7
+		SET name = $1, description = $2, price_cents = $3, stock = $4, images = $5, category = $6, updated_at = $7
 		WHERE id = $8
-		RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at
+		RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 	`
 
 	product.UpdatedAt = time.Now()
@@ -288,7 +296,7 @@ func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Pro
 		query,
 		product.Name,
 		product.Description,
-		product.Price,
+		product.PriceCents,
 		product.Stock,
 		pq.Array(product.Images),
 		product.Category,
@@ -298,7 +306,7 @@ func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Pro
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -327,6 +335,9 @@ func (r *postgresRepository) Delete(ctx context.Context, id string) error {
 	query := "DELETE FROM products WHERE id = $1"
 
 	result, err := r.db.ExecContext(ctx, query, id)
+	if isInvalidID(err) {
+		return ErrProductNotFound
+	}
 	if err != nil {
 		r.log.Error(ctx, "Failed to delete product", map[string]interface{}{"error": err.Error(), "product_id": id})
 		return fmt.Errorf("failed to delete product: %w", err)
@@ -340,7 +351,7 @@ func (r *postgresRepository) Delete(ctx context.Context, id string) error {
 
 	if rows == 0 {
 		r.log.Warn(ctx, "Product not found for deletion", map[string]interface{}{"product_id": id})
-		return fmt.Errorf("product not found")
+		return ErrProductNotFound
 	}
 
 	r.log.Info(ctx, "Product deleted successfully", map[string]interface{}{"product_id": id})
@@ -360,17 +371,17 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 	}
 
 	offset := (page - 1) * pageSize
-	searchPattern := "%" + strings.ToLower(query) + "%"
+	query = strings.TrimSpace(query)
 
-	// Count total matching products
+	// Full-text search on the weighted search_vector column (name ranks above description).
 	countQuery := `
 		SELECT COUNT(*)
 		FROM products
-		WHERE LOWER(name) LIKE $1 OR LOWER(description) LIKE $1
+		WHERE search_vector @@ websearch_to_tsquery('english', $1)
 	`
 
 	var total int32
-	err := r.db.QueryRowContext(ctx, countQuery, searchPattern).Scan(&total)
+	err := r.db.QueryRowContext(ctx, countQuery, query).Scan(&total)
 	if err != nil {
 		r.log.Error(ctx, "Failed to count search results", map[string]interface{}{"error": err.Error()})
 		return nil, 0, fmt.Errorf("failed to count search results: %w", err)
@@ -378,14 +389,14 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 
 	// Search products
 	searchQuery := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
-		WHERE LOWER(name) LIKE $1 OR LOWER(description) LIKE $1
-		ORDER BY created_at DESC
+		WHERE search_vector @@ websearch_to_tsquery('english', $1)
+		ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC, created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, searchQuery, searchPattern, pageSize, offset)
+	rows, err := r.db.QueryContext(ctx, searchQuery, query, pageSize, offset)
 	if err != nil {
 		r.log.Error(ctx, "Failed to search products", map[string]interface{}{"error": err.Error()})
 		return nil, 0, fmt.Errorf("failed to search products: %w", err)
@@ -401,7 +412,7 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 			&product.ID,
 			&product.Name,
 			&product.Description,
-			&product.Price,
+			&product.PriceCents,
 			&product.SKU,
 			&product.Stock,
 			&images,
@@ -430,4 +441,10 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 // Close closes the database connection
 func (r *postgresRepository) Close() error {
 	return r.db.Close()
+}
+
+// isInvalidID reports a malformed UUID, which callers should treat the same as a missing product.
+func isInvalidID(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "22P02"
 }

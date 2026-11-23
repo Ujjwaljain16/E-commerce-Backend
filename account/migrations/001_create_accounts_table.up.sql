@@ -12,10 +12,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 -- Create index on email for faster lookups
-CREATE INDEX idx_accounts_email ON accounts(email);
+CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
 
 -- Create index on is_active for filtering
-CREATE INDEX idx_accounts_is_active ON accounts(is_active);
+CREATE INDEX IF NOT EXISTS idx_accounts_is_active ON accounts(is_active);
 
 -- Create function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -27,6 +27,7 @@ END;
 $$ language 'plpgsql';
 
 -- Create trigger to call the function before update
+DROP TRIGGER IF EXISTS update_accounts_updated_at ON accounts;
 CREATE TRIGGER update_accounts_updated_at
     BEFORE UPDATE ON accounts
     FOR EACH ROW

@@ -31,18 +31,18 @@ func TestCreate(t *testing.T) {
 	product := &Product{
 		Name:        "Test Product",
 		Description: "Test Description",
-		Price:       99.99,
+		PriceCents:  9999,
 		SKU:         "TEST-001",
 		Stock:       10,
 		Images:      []string{"image1.jpg", "image2.jpg"},
 		Category:    "Electronics",
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow("test-id", product.Name, product.Description, product.Price, product.SKU, product.Stock, pq.Array(product.Images), product.Category, time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow("test-id", product.Name, product.Description, product.PriceCents, product.SKU, product.Stock, pq.Array(product.Images), product.Category, time.Now(), time.Now())
 
 	mock.ExpectQuery(`INSERT INTO products`).
-		WithArgs(sqlmock.AnyArg(), product.Name, product.Description, product.Price, product.SKU, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), product.Name, product.Description, product.PriceCents, product.SKU, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(rows)
 
 	result, err := repo.Create(ctx, product)
@@ -52,7 +52,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.Name != product.Name {
@@ -72,7 +72,7 @@ func TestCreate_Error(t *testing.T) {
 	product := &Product{
 		Name:        "Test Product",
 		Description: "Test Description",
-		Price:       99.99,
+		PriceCents:  9999,
 		SKU:         "TEST-001",
 		Stock:       10,
 		Images:      []string{"image1.jpg"},
@@ -80,7 +80,7 @@ func TestCreate_Error(t *testing.T) {
 	}
 
 	mock.ExpectQuery(`INSERT INTO products`).
-		WithArgs(sqlmock.AnyArg(), product.Name, product.Description, product.Price, product.SKU, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), product.Name, product.Description, product.PriceCents, product.SKU, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnError(sql.ErrConnDone)
 
 	result, err := repo.Create(ctx, product)
@@ -105,8 +105,8 @@ func TestGetByID(t *testing.T) {
 	ctx := context.Background()
 	productID := "test-id"
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow(productID, "Test Product", "Test Description", 99.99, "TEST-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow(productID, "Test Product", "Test Description", 9999, "TEST-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT (.+) FROM products WHERE id`).
 		WithArgs(productID).
@@ -119,7 +119,7 @@ func TestGetByID(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.ID != productID {
@@ -164,8 +164,8 @@ func TestGetBySKU(t *testing.T) {
 	ctx := context.Background()
 	sku := "TEST-001"
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow("test-id", "Test Product", "Test Description", 99.99, sku, 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow("test-id", "Test Product", "Test Description", 9999, sku, 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT (.+) FROM products WHERE sku`).
 		WithArgs(sku).
@@ -178,7 +178,7 @@ func TestGetBySKU(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.SKU != sku {
@@ -203,9 +203,9 @@ func TestList(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM products`).
 		WillReturnRows(countRows)
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow("id1", "Product 1", "Description 1", 99.99, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now()).
-		AddRow("id2", "Product 2", "Description 2", 149.99, "SKU-002", 20, pq.Array([]string{"image2.jpg"}), "Books", time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow("id1", "Product 1", "Description 1", 9999, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now()).
+		AddRow("id2", "Product 2", "Description 2", 14999, "SKU-002", 20, pq.Array([]string{"image2.jpg"}), "Books", time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT (.+) FROM products ORDER BY created_at DESC LIMIT`).
 		WithArgs(pageSize, int32(0)).
@@ -244,8 +244,8 @@ func TestList_WithCategory(t *testing.T) {
 		WithArgs(category).
 		WillReturnRows(countRows)
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow("id1", "Product 1", "Description 1", 99.99, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow("id1", "Product 1", "Description 1", 9999, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT (.+) FROM products WHERE category`).
 		WithArgs(category, pageSize, int32(0)).
@@ -279,18 +279,18 @@ func TestUpdate(t *testing.T) {
 		ID:          "test-id",
 		Name:        "Updated Product",
 		Description: "Updated Description",
-		Price:       199.99,
+		PriceCents:  19999,
 		SKU:         "TEST-001",
 		Stock:       20,
 		Images:      []string{"new-image.jpg"},
 		Category:    "Electronics",
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow(product.ID, product.Name, product.Description, product.Price, product.SKU, product.Stock, pq.Array(product.Images), product.Category, time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow(product.ID, product.Name, product.Description, product.PriceCents, product.SKU, product.Stock, pq.Array(product.Images), product.Category, time.Now(), time.Now())
 
 	mock.ExpectQuery(`UPDATE products SET`).
-		WithArgs(product.Name, product.Description, product.Price, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), product.ID).
+		WithArgs(product.Name, product.Description, product.PriceCents, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), product.ID).
 		WillReturnRows(rows)
 
 	result, err := repo.Update(ctx, product)
@@ -300,7 +300,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.Name != product.Name {
@@ -321,7 +321,7 @@ func TestUpdate_NotFound(t *testing.T) {
 		ID:          "non-existent",
 		Name:        "Updated Product",
 		Description: "Updated Description",
-		Price:       199.99,
+		PriceCents:  19999,
 		SKU:         "TEST-001",
 		Stock:       20,
 		Images:      []string{"new-image.jpg"},
@@ -329,7 +329,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	}
 
 	mock.ExpectQuery(`UPDATE products SET`).
-		WithArgs(product.Name, product.Description, product.Price, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), product.ID).
+		WithArgs(product.Name, product.Description, product.PriceCents, product.Stock, pq.Array(product.Images), product.Category, sqlmock.AnyArg(), product.ID).
 		WillReturnError(sql.ErrNoRows)
 
 	result, err := repo.Update(ctx, product)
@@ -399,15 +399,15 @@ func TestSearch(t *testing.T) {
 	query := "test"
 	page := int32(1)
 	pageSize := int32(10)
-	searchPattern := "%test%"
+	searchPattern := "test"
 
 	countRows := sqlmock.NewRows([]string{"count"}).AddRow(1)
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM products WHERE`).
 		WithArgs(searchPattern).
 		WillReturnRows(countRows)
 
-	rows := sqlmock.NewRows([]string{"id", "name", "description", "price", "sku", "stock", "images", "category", "created_at", "updated_at"}).
-		AddRow("id1", "Test Product", "Test Description", 99.99, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
+	rows := sqlmock.NewRows([]string{"id", "name", "description", "price_cents", "sku", "stock", "images", "category", "created_at", "updated_at"}).
+		AddRow("id1", "Test Product", "Test Description", 9999, "SKU-001", 10, pq.Array([]string{"image1.jpg"}), "Electronics", time.Now(), time.Now())
 
 	mock.ExpectQuery(`SELECT (.+) FROM products WHERE`).
 		WithArgs(searchPattern, pageSize, int32(0)).

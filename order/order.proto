@@ -25,8 +25,8 @@ message OrderItem {
     string product_id = 3;
     string product_name = 4;
     int32 quantity = 5;
-    double price = 6;
-    double subtotal = 7;
+    int64 price_cents = 6;
+    int64 subtotal_cents = 7;
 }
 
 // Order represents a customer order
@@ -35,7 +35,7 @@ message Order {
     string user_id = 2;
     OrderStatus status = 3;
     repeated OrderItem items = 4;
-    double total_amount = 5;
+    int64 total_amount_cents = 5;
     string shipping_address = 6;
     string billing_address = 7;
     string payment_method = 8;
@@ -56,7 +56,7 @@ message OrderItemInput {
     string product_id = 1;
     string product_name = 2;
     int32 quantity = 3;
-    double price = 4;
+    int64 price_cents = 4; // ignored: the catalog price at reservation time is authoritative
 }
 
 message CreateOrderResponse {

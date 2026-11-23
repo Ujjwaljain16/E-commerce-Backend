@@ -1,31 +1,22 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
 
-# Install build dependencies
-RUN apk add --no-cache git
-
-# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build the order service
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o order-service ./order/cmd/order
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/order-service ./order/cmd/order
 
-# Final stage
-FROM alpine:latest
+# Final stage: no shell, no package manager, runs as an unprivileged user
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk --no-cache add ca-certificates
+COPY --from=builder /out/order-service /order-service
 
-WORKDIR /root/
+EXPOSE 50053 9092
 
-# Copy binary from builder
-COPY --from=builder /app/order-service .
+USER nonroot:nonroot
 
-EXPOSE 50053
-
-CMD ["./order-service"]
+ENTRYPOINT ["/order-service"]

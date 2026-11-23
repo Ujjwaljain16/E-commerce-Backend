@@ -1,84 +1,74 @@
-.PHONY: help proto-gen test lint build clean docker-up docker-down coverage
+.PHONY: help proto-gen test integration-test e2e load coverage lint fmt build clean docker-up docker-down docker-logs monitoring-up k8s-render deps
+
+SERVICES := account catalog order payment notification graphql
 
 ## help: Display available commands
 help:
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## //'
 
-## proto-gen: Generate protobuf code for all services
+## proto-gen: Regenerate protobuf code with buf (needs protoc-gen-go and protoc-gen-go-grpc on PATH)
 proto-gen:
-	@echo "Generating protobuf files..."
-	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative account/account.proto
-	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative catalog/catalog.proto
-	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative order/order.proto
-	@echo "✅ Protobuf generation complete"
+	go run github.com/bufbuild/buf/cmd/buf@v1.47.2 generate
 
-## test: Run all unit tests
+## test: Run unit tests (no Docker needed)
 test:
-	@echo "Running unit tests..."
-	go test -v -short ./...
-	@echo "✅ Tests passed"
+	go test -short ./...
 
-## coverage: Run tests with coverage report
-coverage:
-	@echo "Running tests with coverage..."
-	go test -v -short -coverprofile=coverage.out -covermode=atomic ./...
-	go tool cover -func=coverage.out
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "✅ Coverage report: coverage.html"
-
-## integration-test: Run integration tests
+## integration-test: Run repository tests against throwaway Postgres containers (needs Docker)
 integration-test:
-	@echo "Running integration tests..."
-	go test -v -tags=integration ./tests/integration/...
-	@echo "✅ Integration tests complete"
+	go test -count=1 ./account/... ./catalog/... ./order/...
 
-## lint: Run linters
+## e2e: Run the end-to-end flow against a running stack (make docker-up first)
+e2e:
+	go test -count=1 -tags=e2e ./tests/e2e/...
+
+## load: 30s load test through the gateway (start the stack with a raised RATE_LIMIT_RPS)
+load:
+	go run ./tests/load -users 20 -duration 30s
+
+## coverage: Unit test coverage report
+coverage:
+	go test -short -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -func=coverage.out | tail -1
+
+## lint: gofmt, vet and staticcheck
 lint:
-	@echo "Running linters..."
-	gofmt -s -l .
-	golangci-lint run --timeout 5m
-	@echo "✅ Linting complete"
+	gofmt -s -l $$(git ls-files '*.go')
+	go vet ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
 
 ## fmt: Format code
 fmt:
-	@echo "Formatting code..."
-	gofmt -s -w .
-	@echo "✅ Code formatted"
+	gofmt -s -w $$(git ls-files '*.go')
 
-## build: Build all services
+## build: Build all service binaries into bin/
 build:
-	@echo "Building all services..."
-	cd account/cmd/account && go build -o ../../../bin/account
-	cd catalog/cmd/catalog && go build -o ../../../bin/catalog
-	cd order/cmd/order && go build -o ../../../bin/order
-	cd payment/cmd/payment && go build -o ../../../bin/payment
-	cd notification/cmd/notification && go build -o ../../../bin/notification
-	cd graphql && go build -o ../bin/graphql
-	@echo "✅ Build complete"
+	@for s in $(SERVICES); do go build -trimpath -o bin/$$s ./$$s/cmd/$$s || exit 1; done
 
-## docker-up: Start all services with Docker Compose
+## docker-up: Build and start the full stack
 docker-up:
-	@echo "Starting services..."
-	docker-compose up -d
-	@echo "✅ Services started"
+	docker compose up -d --build
 
-## docker-down: Stop all services
+## monitoring-up: Start the stack plus Prometheus (localhost:9190) and Grafana (localhost:3000)
+monitoring-up:
+	docker compose --profile monitoring up -d --build
+
+## docker-down: Stop the stack (add -v to the command to also drop data volumes)
 docker-down:
-	@echo "Stopping services..."
-	docker-compose down
-	@echo "✅ Services stopped"
+	docker compose --profile monitoring down
 
-## clean: Clean build artifacts
+## docker-logs: Follow service logs
+docker-logs:
+	docker compose logs -f --tail=100
+
+## k8s-render: Render the Kubernetes manifests
+k8s-render:
+	kubectl kustomize k8s
+
+## clean: Remove build artifacts
 clean:
-	@echo "Cleaning..."
-	rm -rf bin/
-	rm -f coverage.out coverage.html
-	@echo "✅ Cleaned"
+	rm -rf bin/ coverage.out coverage.html
 
-## deps: Download and tidy dependencies
+## deps: Download dependencies
 deps:
-	@echo "Downloading dependencies..."
 	go mod download
-	go mod tidy
-	@echo "✅ Dependencies updated"

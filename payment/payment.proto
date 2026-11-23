@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package payment;
+
+option go_package = "github.com/Ujjwaljain16/E-commerce-Backend/payment/pb";
+
+import "google/protobuf/timestamp.proto";
+
+enum PaymentStatus {
+    PAYMENT_STATUS_UNSPECIFIED = 0;
+    PAYMENT_STATUS_PENDING = 1;
+    PAYMENT_STATUS_SUCCEEDED = 2;
+    PAYMENT_STATUS_FAILED = 3;
+    PAYMENT_STATUS_REFUNDED = 4;
+    PAYMENT_STATUS_CANCELLED = 5; // order was cancelled before it was charged
+}
+
+message Payment {
+    string id = 1;
+    string order_id = 2;
+    string user_id = 3;
+    int64 amount_cents = 4;
+    string currency = 5;
+    PaymentStatus status = 6;
+    string method = 7;
+    string provider_ref = 8;
+    string failure_reason = 9;
+    string idempotency_key = 10;
+    google.protobuf.Timestamp created_at = 11;
+    google.protobuf.Timestamp updated_at = 12;
+}
+
+message ProcessPaymentRequest {
+    string order_id = 1;
+    string user_id = 2;
+    int64 amount_cents = 3;
+    string currency = 4;
+    string method = 5;
+    string idempotency_key = 6; // retries with the same key return the original payment
+}
+
+message ProcessPaymentResponse {
+    Payment payment = 1;
+}
+
+message GetPaymentRequest {
+    string id = 1;
+}
+
+message GetPaymentByOrderRequest {
+    string order_id = 1;
+}
+
+message GetPaymentResponse {
+    Payment payment = 1;
+}
+
+message ListPaymentsRequest {
+    string user_id = 1;
+    int32 page = 2;
+    int32 page_size = 3;
+}
+
+message ListPaymentsResponse {
+    repeated Payment payments = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+message RefundPaymentRequest {
+    string payment_id = 1;
+    string reason = 2;
+}
+
+message RefundPaymentResponse {
+    Payment payment = 1;
+}
+
+// PaymentService charges orders (normally driven by order.created events) and exposes payment history.
+service PaymentService {
+    rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse);
+    rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+    rpc GetPaymentByOrder(GetPaymentByOrderRequest) returns (GetPaymentResponse);
+    rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+    rpc RefundPayment(RefundPaymentRequest) returns (RefundPaymentResponse);
+}

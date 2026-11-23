@@ -1,0 +1,222 @@
+"RFC 3339 timestamp."
+scalar Time
+
+"""
+An amount of money as a whole number of minor units (cents for USD), e.g. 3998 means $39.98.
+A 64-bit integer, so it is not limited to the 32-bit range of Int. Never a float.
+"""
+scalar Money
+
+type User {
+  id: ID!
+  email: String!
+  name: String!
+  phone: String!
+  "USER or ADMIN."
+  role: String!
+  isVerified: Boolean!
+  isActive: Boolean!
+  createdAt: Time
+  updatedAt: Time
+}
+
+type AuthPayload {
+  user: User!
+  accessToken: String!
+  refreshToken: String!
+}
+
+type Product {
+  id: ID!
+  name: String!
+  description: String!
+  priceCents: Money!
+  sku: String!
+  stock: Int!
+  images: [String!]!
+  category: String!
+  createdAt: Time
+  updatedAt: Time
+}
+
+type ProductPage {
+  items: [Product!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+type OrderItem {
+  id: ID!
+  productId: ID!
+  productName: String!
+  quantity: Int!
+  priceCents: Money!
+  subtotalCents: Money!
+}
+
+type Order {
+  id: ID!
+  userId: ID!
+  status: OrderStatus!
+  items: [OrderItem!]!
+  totalAmountCents: Money!
+  shippingAddress: String!
+  billingAddress: String!
+  paymentMethod: String!
+  createdAt: Time
+  updatedAt: Time
+}
+
+type OrderPage {
+  items: [Order!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+type Payment {
+  id: ID!
+  orderId: ID!
+  userId: ID!
+  amountCents: Money!
+  currency: String!
+  status: PaymentStatus!
+  method: String!
+  providerRef: String!
+  failureReason: String!
+  createdAt: Time
+  updatedAt: Time
+}
+
+type PaymentPage {
+  items: [Payment!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+}
+
+type Notification {
+  id: ID!
+  type: String!
+  channel: String!
+  recipient: String!
+  subject: String!
+  body: String!
+  status: String!
+  createdAt: Time
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  total: Int!
+  page: Int!
+  pageSize: Int!
+}
+
+input RegisterInput {
+  email: String!
+  password: String!
+  name: String!
+  phone: String
+}
+
+input CreateProductInput {
+  name: String!
+  description: String
+  "Must be greater than zero."
+  priceCents: Money!
+  sku: String!
+  stock: Int!
+  images: [String!]
+  category: String
+}
+
+"Fields left out keep their current value."
+input UpdateProductInput {
+  name: String
+  description: String
+  priceCents: Money
+  stock: Int
+  images: [String!]
+  category: String
+}
+
+input OrderItemInput {
+  productId: ID!
+  quantity: Int!
+}
+
+input CreateOrderInput {
+  items: [OrderItemInput!]!
+  shippingAddress: String!
+  billingAddress: String!
+  paymentMethod: String!
+}
+
+type Query {
+  "The signed-in user."
+  me: User!
+
+  product(id: ID!): Product
+  products(page: Int = 1, pageSize: Int = 20, category: String): ProductPage!
+  searchProducts(query: String!, page: Int = 1, pageSize: Int = 20): ProductPage!
+
+  "Returns NOT_FOUND unless the order belongs to the caller (admins can read any order)."
+  order(id: ID!): Order
+  myOrders(page: Int = 1, pageSize: Int = 20): OrderPage!
+  "Admin only."
+  orders(page: Int = 1, pageSize: Int = 20, userId: ID, status: OrderStatus): OrderPage!
+
+  paymentForOrder(orderId: ID!): Payment
+  myPayments(page: Int = 1, pageSize: Int = 20): PaymentPage!
+
+  myNotifications(page: Int = 1, pageSize: Int = 20): NotificationPage!
+}
+
+type Mutation {
+  register(input: RegisterInput!): AuthPayload!
+  login(email: String!, password: String!): AuthPayload!
+  refreshToken(refreshToken: String!): AuthPayload!
+  "Revokes the refresh token. The access token stays valid until it expires (15 minutes)."
+  logout(refreshToken: String!): Boolean!
+
+  "Arguments left out keep their current value."
+  updateProfile(name: String, phone: String): User!
+  changePassword(oldPassword: String!, newPassword: String!): Boolean!
+  deleteAccount: Boolean!
+
+  "Admin only."
+  createProduct(input: CreateProductInput!): Product!
+  "Admin only."
+  updateProduct(id: ID!, input: UpdateProductInput!): Product!
+  "Admin only."
+  deleteProduct(id: ID!): Boolean!
+
+  "Only product IDs and quantities are forwarded; clients cannot set prices."
+  createOrder(input: CreateOrderInput!): Order!
+  cancelOrder(id: ID!, reason: String): Boolean!
+  "Admin only."
+  updateOrderStatus(id: ID!, status: OrderStatus!): Order!
+
+  "Admin only."
+  refundPayment(paymentId: ID!, reason: String!): Payment!
+}

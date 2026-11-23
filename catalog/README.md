@@ -18,7 +18,7 @@ The Catalog Service provides product catalog management functionality for the e-
 ## Architecture
 
 ### Tech Stack
-- **Language**: Go 1.24
+- **Language**: Go 1.26
 - **Database**: PostgreSQL 16
 - **RPC Framework**: gRPC
 - **Serialization**: Protocol Buffers (proto3)
@@ -57,7 +57,7 @@ CREATE TABLE products (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    price_cents BIGINT NOT NULL CHECK (price_cents >= 0),
     sku VARCHAR(100) UNIQUE NOT NULL,
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     images TEXT[],
@@ -92,7 +92,7 @@ See [PROTO_SCHEMA.md](./docs/PROTO_SCHEMA.md) for complete API documentation.
 ## Getting Started
 
 ### Prerequisites
-- Go 1.24+
+- Go 1.26+
 - PostgreSQL 16
 - Protocol Buffers compiler (`protoc`)
 - Docker (optional, for containerized deployment)
@@ -106,18 +106,13 @@ go mod download
 
 2. **Generate Protobuf code:**
 ```bash
-protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    catalog/catalog.proto
+make proto-gen   # buf generate, from the repo root; generated code is committed, so this is only needed after proto changes
 ```
 
 3. **Set up database:**
 ```bash
-# Create database
+# Create the database; the service applies its migrations on startup
 createdb ecommerce
-
-# Run migrations
-psql ecommerce < catalog/migrations/001_create_products_table.up.sql
 ```
 
 ### Configuration
@@ -193,7 +188,7 @@ go test ./catalog -v
 grpcurl -plaintext -d '{
   "name": "Laptop",
   "description": "High-performance laptop",
-  "price": 1299.99,
+  "price_cents": 129999,
   "sku": "LAPTOP-001",
   "stock": 50,
   "images": ["https://example.com/img1.jpg"],
@@ -221,7 +216,7 @@ grpcurl -plaintext -d '{
 
 ## Business Rules
 
-1. **Price Validation**: Price must be greater than 0
+1. **Price Validation**: `price_cents` must be greater than 0 and at most 1e12 (integer cents, no floats)
 2. **Stock Validation**: Stock must be >= 0
 3. **SKU Uniqueness**: Each product must have a unique SKU
 4. **SKU Immutability**: SKU cannot be changed after product creation
@@ -253,7 +248,7 @@ Available at `http://localhost:9091/metrics`
 
 ### Adding New Features
 1. Update `catalog.proto` with new RPC methods/messages
-2. Regenerate code: `protoc --go_out=. --go-grpc_out=. catalog/catalog.proto`
+2. Regenerate code: `make proto-gen`
 3. Implement in `service.go` with validation
 4. Add repository methods if needed in `repository.go`
 5. Write tests in `*_test.go`

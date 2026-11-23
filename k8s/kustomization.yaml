@@ -1,0 +1,8 @@
+# kubectl apply -k k8s
+# Create the ecommerce-secrets Secret first (see base/infrastructure/secrets.example.yaml).
+# The manifests live in base/ so overlays (overlays/local for minikube) can build on them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - base

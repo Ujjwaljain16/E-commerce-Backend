@@ -39,7 +39,7 @@ message Order {
     string user_id = 2;
     OrderStatus status = 3;
     repeated OrderItem items = 4;
-    double total_amount = 5;
+    int64 total_amount_cents = 5;
     string shipping_address = 6;
     string billing_address = 7;
     string payment_method = 8;
@@ -54,7 +54,7 @@ message Order {
 | `user_id` | string | 2 | UUID of the user who placed the order |
 | `status` | OrderStatus | 3 | Current status of the order |
 | `items` | repeated OrderItem | 4 | List of items in the order |
-| `total_amount` | double | 5 | Total cost of the order |
+| `total_amount_cents` | int64 | 5 | Total cost of the order in cents |
 | `shipping_address` | string | 6 | Shipping address |
 | `billing_address` | string | 7 | Billing address |
 | `payment_method` | string | 8 | Payment method (e.g., "credit_card") |
@@ -72,8 +72,8 @@ message OrderItem {
     string product_id = 3;
     string product_name = 4;
     int32 quantity = 5;
-    double price = 6;
-    double subtotal = 7;
+    int64 price_cents = 6;
+    int64 subtotal_cents = 7;
 }
 ```
 
@@ -84,8 +84,8 @@ message OrderItem {
 | `product_id` | string | 3 | UUID of the product |
 | `product_name` | string | 4 | Name of the product at time of purchase |
 | `quantity` | int32 | 5 | Quantity purchased |
-| `price` | double | 6 | Price per unit at time of purchase |
-| `subtotal` | double | 7 | Total price for this line item |
+| `price_cents` | int64 | 6 | Price per unit in cents at time of purchase |
+| `subtotal_cents` | int64 | 7 | quantity * price_cents |
 
 #### OrderStatus
 
@@ -125,7 +125,7 @@ message OrderItemInput {
     string product_id = 1;
     string product_name = 2;
     int32 quantity = 3;
-    double price = 4;
+    int64 price_cents = 4; // ignored: the catalog price at reservation time is authoritative
 }
 ```
 

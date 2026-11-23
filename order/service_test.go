@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ type MockRepository struct {
 	GetByIDFunc      func(ctx context.Context, id string) (*Order, error)
 	ListFunc         func(ctx context.Context, page, pageSize int, userID string, status OrderStatus) ([]*Order, int, error)
 	UpdateStatusFunc func(ctx context.Context, id string, status OrderStatus) (*Order, error)
-	CancelFunc       func(ctx context.Context, id string) error
+	CancelFunc       func(ctx context.Context, id, reason string) (*Order, error)
 	GetByUserIDFunc  func(ctx context.Context, userID string, page, pageSize int) ([]*Order, int, error)
 	CloseFunc        func() error
 }
@@ -51,10 +52,18 @@ func (m *MockRepository) UpdateStatus(ctx context.Context, id string, status Ord
 	return nil, errors.New("not implemented")
 }
 
-func (m *MockRepository) Cancel(ctx context.Context, id string) error {
+func (m *MockRepository) Cancel(ctx context.Context, id, reason string) (*Order, error) {
 	if m.CancelFunc != nil {
-		return m.CancelFunc(ctx, id)
+		return m.CancelFunc(ctx, id, reason)
 	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ApplyPaymentResult(ctx context.Context, id string, succeeded bool, reason string) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (m *MockRepository) MarkRefunded(ctx context.Context, id string) error {
 	return errors.New("not implemented")
 }
 
@@ -74,7 +83,7 @@ func (m *MockRepository) Close() error {
 
 func setupService(repo Repository) *Service {
 	log := logger.New("order-test")
-	return NewService(repo, log)
+	return NewService(repo, &fakeInventory{}, log)
 }
 
 func TestCreateOrder_Success(t *testing.T) {
@@ -91,9 +100,9 @@ func TestCreateOrder_Success(t *testing.T) {
 	ctx := context.Background()
 
 	req := &pb.CreateOrderRequest{
-		UserId: "user-123",
+		UserId: "3f2b6f0e-8d0c-4b7a-9b0e-6c1f2a3d4e5f",
 		Items: []*pb.OrderItemInput{
-			{ProductId: "prod-1", ProductName: "Product 1", Quantity: 1, Price: 10.0},
+			{ProductId: "prod-1", ProductName: "Product 1", Quantity: 1, PriceCents: 1000},
 		},
 		ShippingAddress: "123 Main St",
 		BillingAddress:  "123 Main St",
@@ -123,7 +132,7 @@ func TestCreateOrder_MissingUserID(t *testing.T) {
 	req := &pb.CreateOrderRequest{
 		UserId: "",
 		Items: []*pb.OrderItemInput{
-			{ProductId: "prod-1", Quantity: 1, Price: 10.0},
+			{ProductId: "prod-1", Quantity: 1, PriceCents: 1000},
 		},
 	}
 
@@ -147,7 +156,7 @@ func TestGetOrder_Success(t *testing.T) {
 				UserID: "user-123",
 				Status: OrderStatusPending,
 				Items: []OrderItem{
-					{ID: "item-1", ProductID: "prod-1", Quantity: 1, Price: 10.0},
+					{ID: "item-1", ProductID: "prod-1", Quantity: 1, PriceCents: 1000},
 				},
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
@@ -258,8 +267,8 @@ func TestUpdateOrderStatus_Success(t *testing.T) {
 
 func TestCancelOrder_Success(t *testing.T) {
 	mockRepo := &MockRepository{
-		CancelFunc: func(ctx context.Context, id string) error {
-			return nil
+		CancelFunc: func(ctx context.Context, id, reason string) (*Order, error) {
+			return &Order{ID: id, Status: OrderStatusCancelled}, nil
 		},
 	}
 
@@ -275,5 +284,27 @@ func TestCancelOrder_Success(t *testing.T) {
 
 	if !resp.Success {
 		t.Error("Expected success to be true")
+	}
+}
+
+func TestPriceOrder_IntegerCents(t *testing.T) {
+	o := &Order{Items: []OrderItem{{Quantity: 3, PriceCents: 1999}, {Quantity: 1, PriceCents: 1}}}
+	if err := priceOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Items[0].SubtotalCents != 5997 || o.Items[1].SubtotalCents != 1 || o.TotalAmountCents != 5998 {
+		t.Fatalf("unexpected totals: %+v total=%d", o.Items, o.TotalAmountCents)
+	}
+}
+
+func TestPriceOrder_RejectsOverflow(t *testing.T) {
+	cases := [][]OrderItem{
+		{{Quantity: 2, PriceCents: math.MaxInt64/2 + 1}},
+		{{Quantity: 1, PriceCents: math.MaxInt64}, {Quantity: 1, PriceCents: 1}},
+	}
+	for i, items := range cases {
+		if err := priceOrder(&Order{Items: items}); !errors.Is(err, ErrTotalTooLarge) {
+			t.Errorf("case %d: expected ErrTotalTooLarge, got %v", i, err)
+		}
 	}
 }
