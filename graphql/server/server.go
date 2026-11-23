@@ -124,8 +124,12 @@ func NewRouter(opts RouterOptions) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("/graphql", Instrument("/graphql", api))
+	// Razorpay calls this from a handful of IPs and proves itself with a signature, so it skips
+	// the per-IP limiter and bearer auth.
+	mux.Handle("POST /webhooks/razorpay", Instrument("/webhooks/razorpay", RazorpayWebhook(opts.Resolver.PaymentSvc, opts.Logger)))
 	if cfg.PlaygroundEnabled {
 		mux.Handle("GET /playground", Instrument("/playground", playground.Handler("GraphQL playground", "/graphql")))
+		mux.Handle("GET /dev/checkout", Instrument("/dev/checkout", DevCheckoutPage()))
 	}
 	mux.Handle("GET /healthz", Instrument("/healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeStatus(w, http.StatusOK, "ok")

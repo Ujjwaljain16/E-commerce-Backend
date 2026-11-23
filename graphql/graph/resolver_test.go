@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	accountpb "github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
 	catalogpb "github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
@@ -111,11 +112,29 @@ func (f *fakeOrders) ListOrders(_ context.Context, in *orderpb.ListOrdersRequest
 type fakePayments struct {
 	paymentpb.PaymentServiceClient
 	byOrderCalls int
+	// payment, when set, is what GetPaymentByOrder returns.
+	payment    *paymentpb.Payment
+	confirmReq *paymentpb.ConfirmPaymentRequest
+	confirmErr error
 }
 
 func (f *fakePayments) GetPaymentByOrder(_ context.Context, in *paymentpb.GetPaymentByOrderRequest, _ ...grpc.CallOption) (*paymentpb.GetPaymentResponse, error) {
 	f.byOrderCalls++
+	if f.payment != nil {
+		return &paymentpb.GetPaymentResponse{Payment: f.payment}, nil
+	}
 	return &paymentpb.GetPaymentResponse{Payment: &paymentpb.Payment{Id: "pay-1", OrderId: in.OrderId, Status: paymentpb.PaymentStatus_PAYMENT_STATUS_SUCCEEDED}}, nil
+}
+
+func (f *fakePayments) ConfirmPayment(_ context.Context, in *paymentpb.ConfirmPaymentRequest, _ ...grpc.CallOption) (*paymentpb.ConfirmPaymentResponse, error) {
+	f.confirmReq = in
+	if f.confirmErr != nil {
+		return nil, f.confirmErr
+	}
+	return &paymentpb.ConfirmPaymentResponse{Payment: &paymentpb.Payment{
+		Id: "pay-1", OrderId: in.OrderId, Status: paymentpb.PaymentStatus_PAYMENT_STATUS_SUCCEEDED,
+		Provider: "razorpay", ProviderRef: in.ProviderPaymentId, ProviderOrderId: "order_rzp1",
+	}}, nil
 }
 
 type fakeTokens struct{ claims *auth.Claims }
@@ -461,5 +480,83 @@ func TestComplexityLimit(t *testing.T) {
 		`{ products { total page pageSize items { id name priceCents } } }`, nil)
 	if resp.code() != "COMPLEXITY_LIMIT_EXCEEDED" {
 		t.Fatalf("code = %q, errors %+v", resp.code(), resp.Errors)
+	}
+}
+
+const confirmMutation = `mutation($o: ID!, $p: String!, $s: String!) {
+	confirmPayment(orderId: $o, razorpayPaymentId: $p, razorpaySignature: $s) { status provider providerRef checkout { keyId } }
+}`
+
+func TestConfirmPaymentChecksOwnership(t *testing.T) {
+	e := newTestEnv()
+	vars := func(order string) map[string]any { return map[string]any{"o": order, "p": "pay_rzp1", "s": "sig"} }
+
+	if resp := do(t, e.resolver, nil, confirmMutation, vars("o-alice")); resp.code() != CodeUnauthenticated {
+		t.Fatalf("anonymous: code = %q", resp.code())
+	}
+	for _, order := range []string{"o-bob", "o-missing"} {
+		if resp := do(t, e.resolver, alice, confirmMutation, vars(order)); resp.code() != CodeNotFound {
+			t.Fatalf("%s: code = %q, want NOT_FOUND", order, resp.code())
+		}
+	}
+	if e.payments.confirmReq != nil {
+		t.Fatal("payment service called for an order the caller does not own")
+	}
+
+	resp := do(t, e.resolver, alice, confirmMutation, vars("o-alice"))
+	if len(resp.Errors) > 0 {
+		t.Fatalf("own order: %+v", resp.Errors)
+	}
+	got := e.payments.confirmReq
+	if got == nil || got.OrderId != "o-alice" || got.ProviderPaymentId != "pay_rzp1" || got.Signature != "sig" {
+		t.Fatalf("forwarded %+v", got)
+	}
+	if !strings.Contains(string(resp.Data["confirmPayment"]), `"status":"SUCCEEDED"`) ||
+		!strings.Contains(string(resp.Data["confirmPayment"]), `"checkout":null`) {
+		t.Fatalf("confirmPayment = %s", resp.Data["confirmPayment"])
+	}
+
+	if resp := do(t, e.resolver, alice, confirmMutation, map[string]any{"o": "o-alice", "p": "", "s": "sig"}); resp.code() != CodeBadUserInput {
+		t.Fatalf("empty payment id: code = %q", resp.code())
+	}
+}
+
+func TestConfirmPaymentBadSignatureIsBadInput(t *testing.T) {
+	e := newTestEnv()
+	e.payments.confirmErr = status.Error(codes.InvalidArgument, "invalid signature")
+
+	resp := do(t, e.resolver, alice, confirmMutation, map[string]any{"o": "o-alice", "p": "pay_rzp1", "s": "forged"})
+	if resp.code() != CodeBadUserInput || resp.Errors[0].Message != "invalid signature" {
+		t.Fatalf("errors = %+v", resp.Errors)
+	}
+}
+
+func TestPaymentCheckoutOnlyWhileRazorpayPending(t *testing.T) {
+	const query = `query { paymentForOrder(orderId: "o-alice") { provider providerOrderId checkout { keyId orderId amountCents currency } } }`
+	pending := &paymentpb.Payment{
+		Id: "pay-1", OrderId: "o-alice", Status: paymentpb.PaymentStatus_PAYMENT_STATUS_PENDING, AmountCents: 49900,
+		Currency: "INR", Provider: "razorpay", ProviderOrderId: "order_rzp1",
+	}
+
+	e := newTestEnv()
+	e.resolver.RazorpayKeyID = "rzp_test_public"
+	e.payments.payment = pending
+	resp := do(t, e.resolver, alice, query, nil)
+	want := `{"provider":"razorpay","providerOrderId":"order_rzp1","checkout":{"keyId":"rzp_test_public","orderId":"order_rzp1","amountCents":49900,"currency":"INR"}}`
+	if string(resp.Data["paymentForOrder"]) != want {
+		t.Fatalf("paymentForOrder = %s, want %s", resp.Data["paymentForOrder"], want)
+	}
+
+	paid := proto.Clone(pending).(*paymentpb.Payment)
+	paid.Status = paymentpb.PaymentStatus_PAYMENT_STATUS_SUCCEEDED
+	e.payments.payment = paid
+	if resp := do(t, e.resolver, alice, query, nil); !strings.Contains(string(resp.Data["paymentForOrder"]), `"checkout":null`) {
+		t.Fatalf("succeeded payment still offers checkout: %s", resp.Data["paymentForOrder"])
+	}
+
+	e.payments.payment = pending
+	e.resolver.RazorpayKeyID = ""
+	if resp := do(t, e.resolver, alice, query, nil); !strings.Contains(string(resp.Data["paymentForOrder"]), `"checkout":null`) {
+		t.Fatalf("checkout offered without a key id: %s", resp.Data["paymentForOrder"])
 	}
 }

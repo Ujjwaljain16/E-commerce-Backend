@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -75,16 +76,37 @@ func render(topic string, data messageData) (subject, body string, err error) {
 	return sb.String(), bb.String(), nil
 }
 
-// formatTotal renders an amount in cents for humans, e.g. 3998 USD -> "$39.98". Events without a
-// currency are in USD. Integer math only, so the email always matches what was charged.
+// formatTotal renders an amount in minor units for humans, e.g. 3998 USD -> "$39.98" and
+// 123450 INR -> "₹1,234.50" (Indian digit grouping: 1,00,000). Events without a currency are in USD.
+// Integer math only, so the email always matches what was charged.
 func formatTotal(cents int64, currency string) string {
 	if cents <= 0 {
 		return ""
 	}
-	amount := fmt.Sprintf("%d.%02d", cents/100, cents%100)
 	currency = strings.ToUpper(currency)
-	if currency == "" || currency == "USD" {
-		return "$" + amount
+	switch currency {
+	case "", "USD":
+		return fmt.Sprintf("$%d.%02d", cents/100, cents%100)
+	case "INR":
+		return fmt.Sprintf("₹%s.%02d", groupIndian(cents/100), cents%100)
+	default:
+		return fmt.Sprintf("%d.%02d %s", cents/100, cents%100, currency)
 	}
-	return amount + " " + currency
+}
+
+// groupIndian formats n with the last three digits grouped together and pairs before that.
+func groupIndian(n int64) string {
+	digits := strconv.FormatInt(n, 10)
+	if len(digits) <= 3 {
+		return digits
+	}
+	head, tail := digits[:len(digits)-3], digits[len(digits)-3:]
+	var b strings.Builder
+	for i, d := range head {
+		if i > 0 && (len(head)-i)%2 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(d)
+	}
+	return b.String() + "," + tail
 }

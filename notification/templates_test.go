@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"math"
 	"testing"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/events"
@@ -54,4 +55,12 @@ func TestFormatTotal(t *testing.T) {
 	assert.Equal(t, "$39.98", formatTotal(3998, "USD"))
 	assert.Equal(t, "$1234567.89", formatTotal(123456789, "USD"))
 	assert.Equal(t, "10.50 EUR", formatTotal(1050, "eur"))
+
+	assert.Equal(t, "₹0.05", formatTotal(5, "INR"))
+	assert.Equal(t, "₹999.00", formatTotal(99900, "inr"))
+	assert.Equal(t, "₹1,234.50", formatTotal(123450, "INR"))
+	assert.Equal(t, "₹12,345.00", formatTotal(1234500, "INR"))
+	assert.Equal(t, "₹1,00,000.00", formatTotal(10000000, "INR"))
+	assert.Equal(t, "₹12,34,567.89", formatTotal(123456789, "INR"))
+	assert.Equal(t, "₹92,23,37,20,36,85,47,758.07", formatTotal(math.MaxInt64, "INR"))
 }

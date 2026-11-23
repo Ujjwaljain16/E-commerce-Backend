@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/payment/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/events"
@@ -20,6 +21,12 @@ var (
 	ErrNotRefundable = errors.New("only succeeded payments can be refunded")
 	// ErrKeyReused is returned when an idempotency key already belongs to a different order.
 	ErrKeyReused = errors.New("idempotency key already used for another order")
+	// ErrProviderNotConfigured is returned by Razorpay-only operations when the service runs the mock provider.
+	ErrProviderNotConfigured = errors.New("razorpay is not enabled on this payment service")
+	// ErrNotAwaitingCheckout is returned when confirming a payment that is not a Razorpay checkout.
+	ErrNotAwaitingCheckout = errors.New("payment is not waiting for a Razorpay checkout")
+	// ErrInvalidSignature is returned when a Checkout or webhook signature does not verify.
+	ErrInvalidSignature = errors.New("invalid signature")
 )
 
 // invalidInputError is a request problem that retrying will never fix.
@@ -43,11 +50,29 @@ type Service struct {
 	repo      Repository
 	processor Processor
 	log       *logger.Logger
+
+	razorpay       *Razorpay
+	paymentTimeout time.Duration
+	now            func() time.Time
 }
 
-// NewService creates a payment service.
+// NewService creates a payment service that charges synchronously through processor.
 func NewService(repo Repository, processor Processor, log *logger.Logger) *Service {
-	return &Service{repo: repo, processor: processor, log: log}
+	return &Service{repo: repo, processor: processor, log: log, now: time.Now}
+}
+
+// UseRazorpay sends new payments through Razorpay Checkout. They stay PENDING until the customer
+// pays (ConfirmPayment or a webhook) or until timeout passes (ExpirePending).
+func (s *Service) UseRazorpay(rp *Razorpay, timeout time.Duration) *Service {
+	s.razorpay, s.paymentTimeout = rp, timeout
+	return s
+}
+
+func (s *Service) provider() string {
+	if s.razorpay != nil {
+		return ProviderRazorpay
+	}
+	return ProviderMock
 }
 
 // ProcessInput describes a charge for one order.
@@ -99,6 +124,7 @@ func (s *Service) Process(ctx context.Context, in ProcessInput) (*Payment, error
 		Status:         StatusPending,
 		Method:         in.Method,
 		IdempotencyKey: key,
+		Provider:       s.provider(),
 	})
 	if err != nil {
 		return nil, err
@@ -110,6 +136,11 @@ func (s *Service) Process(ctx context.Context, in ProcessInput) (*Payment, error
 		if p.Status != StatusPending {
 			return p, nil
 		}
+	}
+	if p.Provider == ProviderRazorpay {
+		return s.openCheckout(ctx, p, created)
+	}
+	if !created {
 		// A PENDING row means an earlier attempt died mid-charge. The provider dedupes on the
 		// idempotency key, so charging again is safe and keeps the payment from being stuck.
 		s.log.Warn(ctx, "Resuming pending payment", map[string]interface{}{"payment_id": p.ID, "order_id": p.OrderID})
@@ -166,9 +197,17 @@ func (s *Service) Refund(ctx context.Context, paymentID, reason string) (*Paymen
 	if p.Status != StatusSucceeded {
 		return nil, ErrNotRefundable
 	}
-	if err := s.processor.Refund(ctx, RefundRequest{
-		ProviderRef: p.ProviderRef, AmountCents: p.AmountCents, Currency: p.Currency, Reason: reason,
-	}); err != nil {
+	if p.Provider == ProviderRazorpay {
+		if s.razorpay == nil {
+			return nil, ErrProviderNotConfigured
+		}
+		err = s.razorpay.refund(ctx, p.ProviderRef, p.AmountCents)
+	} else {
+		err = s.processor.Refund(ctx, RefundRequest{
+			ProviderRef: p.ProviderRef, AmountCents: p.AmountCents, Currency: p.Currency, Reason: reason,
+		})
+	}
+	if err != nil {
 		return nil, fmt.Errorf("refund payment %s: %w", p.ID, err)
 	}
 
@@ -190,7 +229,9 @@ func (s *Service) Refund(ctx context.Context, paymentID, reason string) (*Paymen
 }
 
 // CancelOrder reacts to an order being cancelled: a succeeded payment is refunded, and an order
-// that was never charged gets a CANCELLED payment so a late order.created cannot charge it.
+// that was never charged gets a CANCELLED payment so a late order.created cannot charge it. A
+// Razorpay checkout still waiting for the customer is CANCELLED too; if they pay anyway, the
+// capture is refunded when it is reported.
 func (s *Service) CancelOrder(ctx context.Context, orderID, userID, reason string) error {
 	if err := requireUUID("order_id", orderID); err != nil {
 		return err
@@ -213,6 +254,7 @@ func (s *Service) CancelOrder(ctx context.Context, orderID, userID, reason strin
 			Status:         StatusCancelled,
 			FailureReason:  reason,
 			IdempotencyKey: orderID,
+			Provider:       s.provider(),
 		})
 		if err != nil {
 			return err
@@ -225,6 +267,16 @@ func (s *Service) CancelOrder(ctx context.Context, orderID, userID, reason strin
 		return err
 	}
 
+	if p.Status == StatusPending && p.Provider == ProviderRazorpay {
+		_, err := s.repo.Apply(ctx, Transition{ID: p.ID, From: StatusPending, To: StatusCancelled, FailureReason: reason})
+		if !errors.Is(err, ErrStatusChanged) {
+			return err
+		}
+		// The customer paid in the meantime; fall through to the refund.
+		if p, err = s.repo.GetByID(ctx, p.ID); err != nil {
+			return err
+		}
+	}
 	if p.Status != StatusSucceeded {
 		return nil
 	}
@@ -319,6 +371,23 @@ func (s *Service) ListPayments(ctx context.Context, req *pb.ListPaymentsRequest)
 	}, nil
 }
 
+// ConfirmPayment completes a Razorpay checkout with the values Checkout handed the client.
+func (s *Service) ConfirmPayment(ctx context.Context, req *pb.ConfirmPaymentRequest) (*pb.ConfirmPaymentResponse, error) {
+	p, err := s.Confirm(ctx, req.OrderId, req.ProviderPaymentId, req.Signature)
+	if err != nil {
+		return nil, s.toStatus(ctx, "confirm payment", err)
+	}
+	return &pb.ConfirmPaymentResponse{Payment: toProto(p)}, nil
+}
+
+// HandleProviderWebhook applies a Razorpay webhook delivered through the gateway.
+func (s *Service) HandleProviderWebhook(ctx context.Context, req *pb.HandleProviderWebhookRequest) (*pb.HandleProviderWebhookResponse, error) {
+	if err := s.HandleWebhook(ctx, req.Body, req.Signature); err != nil {
+		return nil, s.toStatus(ctx, "handle webhook", err)
+	}
+	return &pb.HandleProviderWebhookResponse{}, nil
+}
+
 // RefundPayment refunds a succeeded payment.
 func (s *Service) RefundPayment(ctx context.Context, req *pb.RefundPaymentRequest) (*pb.RefundPaymentResponse, error) {
 	p, err := s.Refund(ctx, req.PaymentId, req.Reason)
@@ -338,6 +407,13 @@ func (s *Service) toStatus(ctx context.Context, op string, err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, ErrKeyReused):
 		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, ErrInvalidSignature):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, ErrProviderNotConfigured), errors.Is(err, ErrNotAwaitingCheckout):
+		return status.Error(codes.FailedPrecondition, err.Error())
+	case isProviderUnavailable(err):
+		s.log.Error(ctx, "Failed to "+op, map[string]interface{}{"error": err.Error()})
+		return status.Error(codes.Unavailable, "payment provider unavailable, try again")
 	default:
 		s.log.Error(ctx, "Failed to "+op, map[string]interface{}{"error": err.Error()})
 		return status.Error(codes.Internal, "failed to "+op)
@@ -360,17 +436,19 @@ func clampPage(page, pageSize int32) (int, int) {
 
 func toProto(p *Payment) *pb.Payment {
 	return &pb.Payment{
-		Id:             p.ID,
-		OrderId:        p.OrderID,
-		UserId:         p.UserID,
-		AmountCents:    p.AmountCents,
-		Currency:       p.Currency,
-		Status:         pb.PaymentStatus(p.Status),
-		Method:         p.Method,
-		ProviderRef:    p.ProviderRef,
-		FailureReason:  p.FailureReason,
-		IdempotencyKey: p.IdempotencyKey,
-		CreatedAt:      timestamppb.New(p.CreatedAt),
-		UpdatedAt:      timestamppb.New(p.UpdatedAt),
+		Id:              p.ID,
+		OrderId:         p.OrderID,
+		UserId:          p.UserID,
+		AmountCents:     p.AmountCents,
+		Currency:        p.Currency,
+		Status:          pb.PaymentStatus(p.Status),
+		Method:          p.Method,
+		ProviderRef:     p.ProviderRef,
+		FailureReason:   p.FailureReason,
+		IdempotencyKey:  p.IdempotencyKey,
+		Provider:        p.Provider,
+		ProviderOrderId: p.ProviderOrderID,
+		CreatedAt:       timestamppb.New(p.CreatedAt),
+		UpdatedAt:       timestamppb.New(p.UpdatedAt),
 	}
 }

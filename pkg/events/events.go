@@ -30,7 +30,7 @@ func NewMeta() Meta {
 }
 
 // OrderItem is a line item as priced by the catalog at reservation time.
-// Money is always an integer number of minor units (cents for USD), never a float.
+// Money is always an integer number of minor units (cents for USD, paise for INR), never a float.
 type OrderItem struct {
 	ProductID   string `json:"product_id"`
 	ProductName string `json:"product_name"`
@@ -55,6 +55,7 @@ type OrderConfirmed struct {
 	OrderID          string `json:"order_id"`
 	UserID           string `json:"user_id"`
 	TotalAmountCents int64  `json:"total_amount_cents"`
+	Currency         string `json:"currency,omitempty"`
 }
 
 // OrderCancelled is published when an order is cancelled by the user or after a failed payment.

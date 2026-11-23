@@ -116,9 +116,50 @@ func (f *fakeRepo) Apply(_ context.Context, t Transition) (*Payment, error) {
 	if t.FailureReason != "" {
 		p.FailureReason = t.FailureReason
 	}
-	f.outbox = append(f.outbox, queuedEvent{topic: t.Topic, key: p.OrderID, event: t.Event.(events.Payment)})
+	if t.Topic != "" {
+		f.outbox = append(f.outbox, queuedEvent{topic: t.Topic, key: p.OrderID, event: t.Event.(events.Payment)})
+	}
 	cp := *p
 	return &cp, nil
+}
+
+func (f *fakeRepo) GetByProviderOrderID(_ context.Context, providerOrderID string) (*Payment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range f.payments {
+		if p.ProviderOrderID != "" && p.ProviderOrderID == providerOrderID {
+			cp := *p
+			return &cp, nil
+		}
+	}
+	return nil, ErrPaymentNotFound
+}
+
+func (f *fakeRepo) SetProviderOrderID(_ context.Context, id, providerOrderID string) (*Payment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.payments[id]
+	if !ok {
+		return nil, ErrPaymentNotFound
+	}
+	if p.Status == StatusPending && p.ProviderOrderID == "" {
+		p.ProviderOrderID = providerOrderID
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (f *fakeRepo) ListPendingBefore(_ context.Context, provider string, cutoff time.Time, limit int) ([]*Payment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*Payment
+	for _, p := range f.payments {
+		if p.Status == StatusPending && p.Provider == provider && p.CreatedAt.Before(cutoff) && len(out) < limit {
+			cp := *p
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
 }
 
 type countingProcessor struct {

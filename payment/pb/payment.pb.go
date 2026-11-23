@@ -81,21 +81,23 @@ func (PaymentStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 type Payment struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrderId        string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	AmountCents    int64                  `protobuf:"varint,4,opt,name=amount_cents,json=amountCents,proto3" json:"amount_cents,omitempty"`
-	Currency       string                 `protobuf:"bytes,5,opt,name=currency,proto3" json:"currency,omitempty"`
-	Status         PaymentStatus          `protobuf:"varint,6,opt,name=status,proto3,enum=payment.PaymentStatus" json:"status,omitempty"`
-	Method         string                 `protobuf:"bytes,7,opt,name=method,proto3" json:"method,omitempty"`
-	ProviderRef    string                 `protobuf:"bytes,8,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"`
-	FailureReason  string                 `protobuf:"bytes,9,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
-	IdempotencyKey string                 `protobuf:"bytes,10,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrderId         string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	UserId          string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AmountCents     int64                  `protobuf:"varint,4,opt,name=amount_cents,json=amountCents,proto3" json:"amount_cents,omitempty"`
+	Currency        string                 `protobuf:"bytes,5,opt,name=currency,proto3" json:"currency,omitempty"`
+	Status          PaymentStatus          `protobuf:"varint,6,opt,name=status,proto3,enum=payment.PaymentStatus" json:"status,omitempty"`
+	Method          string                 `protobuf:"bytes,7,opt,name=method,proto3" json:"method,omitempty"`
+	ProviderRef     string                 `protobuf:"bytes,8,opt,name=provider_ref,json=providerRef,proto3" json:"provider_ref,omitempty"`
+	FailureReason   string                 `protobuf:"bytes,9,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
+	IdempotencyKey  string                 `protobuf:"bytes,10,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Provider        string                 `protobuf:"bytes,13,opt,name=provider,proto3" json:"provider,omitempty"`                                        // "mock" or "razorpay"
+	ProviderOrderId string                 `protobuf:"bytes,14,opt,name=provider_order_id,json=providerOrderId,proto3" json:"provider_order_id,omitempty"` // Razorpay order ID the client opens Checkout with; empty for mock
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Payment) Reset() {
@@ -210,6 +212,20 @@ func (x *Payment) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Payment) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *Payment) GetProviderOrderId() string {
+	if x != nil {
+		return x.ProviderOrderId
+	}
+	return ""
 }
 
 type ProcessPaymentRequest struct {
@@ -696,11 +712,203 @@ func (x *RefundPaymentResponse) GetPayment() *Payment {
 	return nil
 }
 
+type ConfirmPaymentRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OrderId           string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	ProviderPaymentId string                 `protobuf:"bytes,2,opt,name=provider_payment_id,json=providerPaymentId,proto3" json:"provider_payment_id,omitempty"` // razorpay_payment_id from Checkout
+	Signature         string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`                                            // razorpay_signature from Checkout
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ConfirmPaymentRequest) Reset() {
+	*x = ConfirmPaymentRequest{}
+	mi := &file_payment_payment_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmPaymentRequest) ProtoMessage() {}
+
+func (x *ConfirmPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_payment_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmPaymentRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_payment_payment_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ConfirmPaymentRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *ConfirmPaymentRequest) GetProviderPaymentId() string {
+	if x != nil {
+		return x.ProviderPaymentId
+	}
+	return ""
+}
+
+func (x *ConfirmPaymentRequest) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+type ConfirmPaymentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payment       *Payment               `protobuf:"bytes,1,opt,name=payment,proto3" json:"payment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmPaymentResponse) Reset() {
+	*x = ConfirmPaymentResponse{}
+	mi := &file_payment_payment_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmPaymentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmPaymentResponse) ProtoMessage() {}
+
+func (x *ConfirmPaymentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_payment_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmPaymentResponse.ProtoReflect.Descriptor instead.
+func (*ConfirmPaymentResponse) Descriptor() ([]byte, []int) {
+	return file_payment_payment_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ConfirmPaymentResponse) GetPayment() *Payment {
+	if x != nil {
+		return x.Payment
+	}
+	return nil
+}
+
+type HandleProviderWebhookRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Body          []byte                 `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`           // the raw request body, exactly as received
+	Signature     string                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // X-Razorpay-Signature header
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandleProviderWebhookRequest) Reset() {
+	*x = HandleProviderWebhookRequest{}
+	mi := &file_payment_payment_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandleProviderWebhookRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandleProviderWebhookRequest) ProtoMessage() {}
+
+func (x *HandleProviderWebhookRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_payment_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandleProviderWebhookRequest.ProtoReflect.Descriptor instead.
+func (*HandleProviderWebhookRequest) Descriptor() ([]byte, []int) {
+	return file_payment_payment_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *HandleProviderWebhookRequest) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *HandleProviderWebhookRequest) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+type HandleProviderWebhookResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandleProviderWebhookResponse) Reset() {
+	*x = HandleProviderWebhookResponse{}
+	mi := &file_payment_payment_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandleProviderWebhookResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandleProviderWebhookResponse) ProtoMessage() {}
+
+func (x *HandleProviderWebhookResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_payment_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandleProviderWebhookResponse.ProtoReflect.Descriptor instead.
+func (*HandleProviderWebhookResponse) Descriptor() ([]byte, []int) {
+	return file_payment_payment_proto_rawDescGZIP(), []int{13}
+}
+
 var File_payment_payment_proto protoreflect.FileDescriptor
 
 const file_payment_payment_proto_rawDesc = "" +
 	"\n" +
-	"\x15payment/payment.proto\x12\apayment\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbd\x03\n" +
+	"\x15payment/payment.proto\x12\apayment\x1a\x1fgoogle/protobuf/timestamp.proto\"\x85\x04\n" +
 	"\aPayment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x17\n" +
@@ -716,7 +924,9 @@ const file_payment_payment_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcb\x01\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1a\n" +
+	"\bprovider\x18\r \x01(\tR\bprovider\x12*\n" +
+	"\x11provider_order_id\x18\x0e \x01(\tR\x0fproviderOrderId\"\xcb\x01\n" +
 	"\x15ProcessPaymentRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12!\n" +
@@ -746,21 +956,33 @@ const file_payment_payment_proto_rawDesc = "" +
 	"payment_id\x18\x01 \x01(\tR\tpaymentId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"C\n" +
 	"\x15RefundPaymentResponse\x12*\n" +
-	"\apayment\x18\x01 \x01(\v2\x10.payment.PaymentR\apayment*\xbf\x01\n" +
+	"\apayment\x18\x01 \x01(\v2\x10.payment.PaymentR\apayment\"\x80\x01\n" +
+	"\x15ConfirmPaymentRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x12.\n" +
+	"\x13provider_payment_id\x18\x02 \x01(\tR\x11providerPaymentId\x12\x1c\n" +
+	"\tsignature\x18\x03 \x01(\tR\tsignature\"D\n" +
+	"\x16ConfirmPaymentResponse\x12*\n" +
+	"\apayment\x18\x01 \x01(\v2\x10.payment.PaymentR\apayment\"P\n" +
+	"\x1cHandleProviderWebhookRequest\x12\x12\n" +
+	"\x04body\x18\x01 \x01(\fR\x04body\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\tR\tsignature\"\x1f\n" +
+	"\x1dHandleProviderWebhookResponse*\xbf\x01\n" +
 	"\rPaymentStatus\x12\x1e\n" +
 	"\x1aPAYMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PAYMENT_STATUS_PENDING\x10\x01\x12\x1c\n" +
 	"\x18PAYMENT_STATUS_SUCCEEDED\x10\x02\x12\x19\n" +
 	"\x15PAYMENT_STATUS_FAILED\x10\x03\x12\x1b\n" +
 	"\x17PAYMENT_STATUS_REFUNDED\x10\x04\x12\x1c\n" +
-	"\x18PAYMENT_STATUS_CANCELLED\x10\x052\x9c\x03\n" +
+	"\x18PAYMENT_STATUS_CANCELLED\x10\x052\xd7\x04\n" +
 	"\x0ePaymentService\x12Q\n" +
 	"\x0eProcessPayment\x12\x1e.payment.ProcessPaymentRequest\x1a\x1f.payment.ProcessPaymentResponse\x12E\n" +
 	"\n" +
 	"GetPayment\x12\x1a.payment.GetPaymentRequest\x1a\x1b.payment.GetPaymentResponse\x12S\n" +
 	"\x11GetPaymentByOrder\x12!.payment.GetPaymentByOrderRequest\x1a\x1b.payment.GetPaymentResponse\x12K\n" +
 	"\fListPayments\x12\x1c.payment.ListPaymentsRequest\x1a\x1d.payment.ListPaymentsResponse\x12N\n" +
-	"\rRefundPayment\x12\x1d.payment.RefundPaymentRequest\x1a\x1e.payment.RefundPaymentResponseB7Z5github.com/Ujjwaljain16/E-commerce-Backend/payment/pbb\x06proto3"
+	"\rRefundPayment\x12\x1d.payment.RefundPaymentRequest\x1a\x1e.payment.RefundPaymentResponse\x12Q\n" +
+	"\x0eConfirmPayment\x12\x1e.payment.ConfirmPaymentRequest\x1a\x1f.payment.ConfirmPaymentResponse\x12f\n" +
+	"\x15HandleProviderWebhook\x12%.payment.HandleProviderWebhookRequest\x1a&.payment.HandleProviderWebhookResponseB7Z5github.com/Ujjwaljain16/E-commerce-Backend/payment/pbb\x06proto3"
 
 var (
 	file_payment_payment_proto_rawDescOnce sync.Once
@@ -775,44 +997,53 @@ func file_payment_payment_proto_rawDescGZIP() []byte {
 }
 
 var file_payment_payment_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_payment_payment_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_payment_payment_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_payment_payment_proto_goTypes = []any{
-	(PaymentStatus)(0),               // 0: payment.PaymentStatus
-	(*Payment)(nil),                  // 1: payment.Payment
-	(*ProcessPaymentRequest)(nil),    // 2: payment.ProcessPaymentRequest
-	(*ProcessPaymentResponse)(nil),   // 3: payment.ProcessPaymentResponse
-	(*GetPaymentRequest)(nil),        // 4: payment.GetPaymentRequest
-	(*GetPaymentByOrderRequest)(nil), // 5: payment.GetPaymentByOrderRequest
-	(*GetPaymentResponse)(nil),       // 6: payment.GetPaymentResponse
-	(*ListPaymentsRequest)(nil),      // 7: payment.ListPaymentsRequest
-	(*ListPaymentsResponse)(nil),     // 8: payment.ListPaymentsResponse
-	(*RefundPaymentRequest)(nil),     // 9: payment.RefundPaymentRequest
-	(*RefundPaymentResponse)(nil),    // 10: payment.RefundPaymentResponse
-	(*timestamppb.Timestamp)(nil),    // 11: google.protobuf.Timestamp
+	(PaymentStatus)(0),                    // 0: payment.PaymentStatus
+	(*Payment)(nil),                       // 1: payment.Payment
+	(*ProcessPaymentRequest)(nil),         // 2: payment.ProcessPaymentRequest
+	(*ProcessPaymentResponse)(nil),        // 3: payment.ProcessPaymentResponse
+	(*GetPaymentRequest)(nil),             // 4: payment.GetPaymentRequest
+	(*GetPaymentByOrderRequest)(nil),      // 5: payment.GetPaymentByOrderRequest
+	(*GetPaymentResponse)(nil),            // 6: payment.GetPaymentResponse
+	(*ListPaymentsRequest)(nil),           // 7: payment.ListPaymentsRequest
+	(*ListPaymentsResponse)(nil),          // 8: payment.ListPaymentsResponse
+	(*RefundPaymentRequest)(nil),          // 9: payment.RefundPaymentRequest
+	(*RefundPaymentResponse)(nil),         // 10: payment.RefundPaymentResponse
+	(*ConfirmPaymentRequest)(nil),         // 11: payment.ConfirmPaymentRequest
+	(*ConfirmPaymentResponse)(nil),        // 12: payment.ConfirmPaymentResponse
+	(*HandleProviderWebhookRequest)(nil),  // 13: payment.HandleProviderWebhookRequest
+	(*HandleProviderWebhookResponse)(nil), // 14: payment.HandleProviderWebhookResponse
+	(*timestamppb.Timestamp)(nil),         // 15: google.protobuf.Timestamp
 }
 var file_payment_payment_proto_depIdxs = []int32{
 	0,  // 0: payment.Payment.status:type_name -> payment.PaymentStatus
-	11, // 1: payment.Payment.created_at:type_name -> google.protobuf.Timestamp
-	11, // 2: payment.Payment.updated_at:type_name -> google.protobuf.Timestamp
+	15, // 1: payment.Payment.created_at:type_name -> google.protobuf.Timestamp
+	15, // 2: payment.Payment.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 3: payment.ProcessPaymentResponse.payment:type_name -> payment.Payment
 	1,  // 4: payment.GetPaymentResponse.payment:type_name -> payment.Payment
 	1,  // 5: payment.ListPaymentsResponse.payments:type_name -> payment.Payment
 	1,  // 6: payment.RefundPaymentResponse.payment:type_name -> payment.Payment
-	2,  // 7: payment.PaymentService.ProcessPayment:input_type -> payment.ProcessPaymentRequest
-	4,  // 8: payment.PaymentService.GetPayment:input_type -> payment.GetPaymentRequest
-	5,  // 9: payment.PaymentService.GetPaymentByOrder:input_type -> payment.GetPaymentByOrderRequest
-	7,  // 10: payment.PaymentService.ListPayments:input_type -> payment.ListPaymentsRequest
-	9,  // 11: payment.PaymentService.RefundPayment:input_type -> payment.RefundPaymentRequest
-	3,  // 12: payment.PaymentService.ProcessPayment:output_type -> payment.ProcessPaymentResponse
-	6,  // 13: payment.PaymentService.GetPayment:output_type -> payment.GetPaymentResponse
-	6,  // 14: payment.PaymentService.GetPaymentByOrder:output_type -> payment.GetPaymentResponse
-	8,  // 15: payment.PaymentService.ListPayments:output_type -> payment.ListPaymentsResponse
-	10, // 16: payment.PaymentService.RefundPayment:output_type -> payment.RefundPaymentResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	1,  // 7: payment.ConfirmPaymentResponse.payment:type_name -> payment.Payment
+	2,  // 8: payment.PaymentService.ProcessPayment:input_type -> payment.ProcessPaymentRequest
+	4,  // 9: payment.PaymentService.GetPayment:input_type -> payment.GetPaymentRequest
+	5,  // 10: payment.PaymentService.GetPaymentByOrder:input_type -> payment.GetPaymentByOrderRequest
+	7,  // 11: payment.PaymentService.ListPayments:input_type -> payment.ListPaymentsRequest
+	9,  // 12: payment.PaymentService.RefundPayment:input_type -> payment.RefundPaymentRequest
+	11, // 13: payment.PaymentService.ConfirmPayment:input_type -> payment.ConfirmPaymentRequest
+	13, // 14: payment.PaymentService.HandleProviderWebhook:input_type -> payment.HandleProviderWebhookRequest
+	3,  // 15: payment.PaymentService.ProcessPayment:output_type -> payment.ProcessPaymentResponse
+	6,  // 16: payment.PaymentService.GetPayment:output_type -> payment.GetPaymentResponse
+	6,  // 17: payment.PaymentService.GetPaymentByOrder:output_type -> payment.GetPaymentResponse
+	8,  // 18: payment.PaymentService.ListPayments:output_type -> payment.ListPaymentsResponse
+	10, // 19: payment.PaymentService.RefundPayment:output_type -> payment.RefundPaymentResponse
+	12, // 20: payment.PaymentService.ConfirmPayment:output_type -> payment.ConfirmPaymentResponse
+	14, // 21: payment.PaymentService.HandleProviderWebhook:output_type -> payment.HandleProviderWebhookResponse
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_payment_payment_proto_init() }
@@ -826,7 +1057,7 @@ func file_payment_payment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payment_payment_proto_rawDesc), len(file_payment_payment_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

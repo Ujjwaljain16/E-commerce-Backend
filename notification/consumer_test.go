@@ -121,11 +121,13 @@ func TestHandleOrderEventsSendEmail(t *testing.T) {
 			"We received your order " + testOrderID, "$59.98"},
 		{events.TopicOrderConfirmed, events.OrderConfirmed{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmountCents: 5998},
 			"Your order " + testOrderID + " is confirmed", "($59.98)"},
+		{events.TopicOrderConfirmed, events.OrderConfirmed{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmountCents: 12345050, Currency: "INR"},
+			"Your order " + testOrderID + " is confirmed", "(₹1,23,450.50)"},
 		{events.TopicOrderCancelled, events.OrderCancelled{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, Reason: "payment declined"},
 			"Your order " + testOrderID + " was cancelled", "(payment declined)"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.topic, func(t *testing.T) {
+		t.Run(tt.topic+" "+tt.body, func(t *testing.T) {
 			svc, repo, _, sender := newTestService()
 
 			require.NoError(t, svc.HandleMessage(context.Background(), message(t, tt.topic, tt.event)))

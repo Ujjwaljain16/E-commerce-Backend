@@ -154,26 +154,20 @@ func toPayment(p *paymentpb.Payment) *Payment {
 		return nil
 	}
 	return &Payment{
-		ID:            p.GetId(),
-		OrderID:       p.GetOrderId(),
-		UserID:        p.GetUserId(),
-		AmountCents:   p.GetAmountCents(),
-		Currency:      p.GetCurrency(),
-		Status:        toPaymentStatus(p.GetStatus()),
-		Method:        p.GetMethod(),
-		ProviderRef:   p.GetProviderRef(),
-		FailureReason: p.GetFailureReason(),
-		CreatedAt:     toTime(p.GetCreatedAt()),
-		UpdatedAt:     toTime(p.GetUpdatedAt()),
+		ID:              p.GetId(),
+		OrderID:         p.GetOrderId(),
+		UserID:          p.GetUserId(),
+		AmountCents:     p.GetAmountCents(),
+		Currency:        p.GetCurrency(),
+		Status:          toPaymentStatus(p.GetStatus()),
+		Method:          p.GetMethod(),
+		ProviderRef:     p.GetProviderRef(),
+		FailureReason:   p.GetFailureReason(),
+		Provider:        p.GetProvider(),
+		ProviderOrderID: p.GetProviderOrderId(),
+		CreatedAt:       toTime(p.GetCreatedAt()),
+		UpdatedAt:       toTime(p.GetUpdatedAt()),
 	}
-}
-
-func toPayments(in []*paymentpb.Payment) []*Payment {
-	out := make([]*Payment, 0, len(in))
-	for _, p := range in {
-		out = append(out, toPayment(p))
-	}
-	return out
 }
 
 func toNotifications(in []*notificationpb.Notification) []*Notification {

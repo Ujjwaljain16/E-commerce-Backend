@@ -32,7 +32,7 @@ Design choices and their trade-offs are in [decisions.md](decisions.md).
 | account | 50051 | 9090 | users, bcrypt passwords, JWT access/refresh tokens, USER/ADMIN roles |
 | catalog | 50052 | 9091 | products, stock reservations, full-text search, Redis cache |
 | order | 50053 | 9092 | orders, status transitions, order events |
-| payment | 50054 | 9093 | payments (mock provider), refunds, idempotency |
+| payment | 50054 | 9093 | payments (mock or Razorpay), refunds, idempotency |
 | notification | 50055 | 9094 | email templates, SMTP delivery, notification history |
 | graphql | HTTP 8000 | `/metrics`, `/healthz`, `/readyz` | public API, auth, ownership checks |
 
@@ -73,6 +73,17 @@ mutation {
 ```
 
 Poll `order(id: "...") { status }` to watch it go from `PENDING` to `CONFIRMED`. Use `paymentMethod: "card_declined"` to see the failure path. See [graphql/README.md](graphql/README.md) for the full API.
+
+### Payments: mock or Razorpay
+
+By default the payment service uses a mock provider that approves everything except `card_declined` and amounts over $10,000, so the stack runs with no accounts or keys. To take real (test-mode) payments through [Razorpay](https://razorpay.com/docs/):
+
+1. In the Razorpay dashboard, switch to **Test Mode** and generate API keys.
+2. Add a webhook pointing at `https://<public host>/webhooks/razorpay` with a secret of your choice and the events `payment.authorized`, `payment.captured` and `payment.failed`. Razorpay must be able to reach the gateway, so for a laptop use a tunnel such as `cloudflared tunnel --url http://localhost:8000`. Without the webhook, `confirmPayment` still completes payments and unpaid ones still expire, but failed payments only cancel the order after the timeout.
+3. `cp .env.example .env` and fill in the key ID, key secret and webhook secret (`.env` is gitignored). It also sets `CURRENCY=INR`, so catalog prices are read as paise.
+4. `docker compose up -d --build`, then open http://localhost:8000/dev/checkout, log in, enter a product ID and pay with a [test card](https://razorpay.com/docs/payments/payments/test-card-details/).
+
+Checkout is asynchronous: the order stays `PENDING` until the customer pays, the payment is confirmed by signature and webhook, and unpaid checkouts expire after `PAYMENT_TIMEOUT` (30m). Details in [payment/README.md](payment/README.md) and [decisions.md](decisions.md#15-razorpay-checkout-is-asynchronous).
 
 ## Test
 

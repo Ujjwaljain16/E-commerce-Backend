@@ -28,6 +28,8 @@ message Payment {
     string idempotency_key = 10;
     google.protobuf.Timestamp created_at = 11;
     google.protobuf.Timestamp updated_at = 12;
+    string provider = 13;          // "mock" or "razorpay"
+    string provider_order_id = 14; // Razorpay order ID the client opens Checkout with; empty for mock
 }
 
 message ProcessPaymentRequest {
@@ -77,6 +79,23 @@ message RefundPaymentResponse {
     Payment payment = 1;
 }
 
+message ConfirmPaymentRequest {
+    string order_id = 1;
+    string provider_payment_id = 2; // razorpay_payment_id from Checkout
+    string signature = 3;           // razorpay_signature from Checkout
+}
+
+message ConfirmPaymentResponse {
+    Payment payment = 1;
+}
+
+message HandleProviderWebhookRequest {
+    bytes body = 1;       // the raw request body, exactly as received
+    string signature = 2; // X-Razorpay-Signature header
+}
+
+message HandleProviderWebhookResponse {}
+
 // PaymentService charges orders (normally driven by order.created events) and exposes payment history.
 service PaymentService {
     rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse);
@@ -84,4 +103,10 @@ service PaymentService {
     rpc GetPaymentByOrder(GetPaymentByOrderRequest) returns (GetPaymentResponse);
     rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
     rpc RefundPayment(RefundPaymentRequest) returns (RefundPaymentResponse);
+    // ConfirmPayment completes a Razorpay payment from the Checkout result. A bad signature is
+    // INVALID_ARGUMENT and changes nothing.
+    rpc ConfirmPayment(ConfirmPaymentRequest) returns (ConfirmPaymentResponse);
+    // HandleProviderWebhook applies a Razorpay webhook. A bad signature is INVALID_ARGUMENT; events
+    // that are not about our payments are acknowledged and ignored.
+    rpc HandleProviderWebhook(HandleProviderWebhookRequest) returns (HandleProviderWebhookResponse);
 }

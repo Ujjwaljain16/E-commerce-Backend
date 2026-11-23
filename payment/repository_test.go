@@ -13,7 +13,7 @@ import (
 
 var paymentRowColumns = []string{
 	"id", "order_id", "user_id", "amount_cents", "currency", "status", "method",
-	"provider_ref", "failure_reason", "idempotency_key", "created_at", "updated_at",
+	"provider_ref", "failure_reason", "idempotency_key", "provider", "provider_order_id", "created_at", "updated_at",
 }
 
 const (
@@ -34,14 +34,14 @@ func paymentRow(status Status, providerRef string) *sqlmock.Rows {
 	now := time.Now()
 	return sqlmock.NewRows(paymentRowColumns).AddRow(
 		testPaymentID, testOrderID, testUserID, int64(4999), "USD", int64(status), "card",
-		providerRef, "", testOrderID, now, now)
+		providerRef, "", testOrderID, ProviderMock, "", now, now)
 }
 
 func TestRepositoryInsertCreatesPayment(t *testing.T) {
 	repo, mock := newMockRepo(t)
 
 	mock.ExpectQuery(`INSERT INTO payments .* ON CONFLICT DO NOTHING`).
-		WithArgs(testPaymentID, testOrderID, testUserID, int64(4999), "USD", StatusPending, "card", "", testOrderID).
+		WithArgs(testPaymentID, testOrderID, testUserID, int64(4999), "USD", StatusPending, "card", "", testOrderID, ProviderMock).
 		WillReturnRows(paymentRow(StatusPending, ""))
 
 	p, created, err := repo.Insert(context.Background(), &Payment{
@@ -135,6 +135,54 @@ func TestRepositoryListByUser(t *testing.T) {
 	payments, total, err := repo.ListByUser(context.Background(), testUserID, 2, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 11, total)
+	require.Len(t, payments, 1)
+	assert.Equal(t, testPaymentID, payments[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryApplyWithoutTopicQueuesNoEvent(t *testing.T) {
+	repo, mock := newMockRepo(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`UPDATE payments`).
+		WithArgs(StatusCancelled, "", "changed my mind", testPaymentID, StatusPending).
+		WillReturnRows(paymentRow(StatusCancelled, ""))
+	mock.ExpectCommit()
+
+	p, err := repo.Apply(context.Background(), Transition{
+		ID: testPaymentID, From: StatusPending, To: StatusCancelled, FailureReason: "changed my mind",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusCancelled, p.Status)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositorySetProviderOrderIDOnlyOnPendingWithoutOne(t *testing.T) {
+	repo, mock := newMockRepo(t)
+
+	mock.ExpectQuery(`UPDATE payments SET provider_order_id = \$2.*WHERE id = \$1 AND status = \$3 AND provider_order_id IS NULL`).
+		WithArgs(testPaymentID, "order_rzp1", StatusPending).
+		WillReturnRows(sqlmock.NewRows(paymentRowColumns))
+	mock.ExpectQuery(`SELECT .* FROM payments WHERE id = \$1`).
+		WithArgs(testPaymentID).
+		WillReturnRows(paymentRow(StatusCancelled, ""))
+
+	p, err := repo.SetProviderOrderID(context.Background(), testPaymentID, "order_rzp1")
+	require.NoError(t, err)
+	assert.Equal(t, StatusCancelled, p.Status, "a payment that moved on is returned unchanged")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryListPendingBefore(t *testing.T) {
+	repo, mock := newMockRepo(t)
+	cutoff := time.Now().Add(-30 * time.Minute)
+
+	mock.ExpectQuery(`SELECT .* FROM payments\s+WHERE status = \$1 AND provider = \$2 AND created_at < \$3\s+ORDER BY created_at LIMIT \$4`).
+		WithArgs(StatusPending, ProviderRazorpay, cutoff, 100).
+		WillReturnRows(paymentRow(StatusPending, ""))
+
+	payments, err := repo.ListPendingBefore(context.Background(), ProviderRazorpay, cutoff, 100)
+	require.NoError(t, err)
 	require.Len(t, payments, 1)
 	assert.Equal(t, testPaymentID, payments[0].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())

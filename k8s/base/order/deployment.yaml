@@ -50,6 +50,13 @@ spec:
                 secretKeyRef:
                   name: ecommerce-secrets
                   key: DATABASE_URL
+            # Unset means USD; Razorpay needs INR.
+            - name: CURRENCY
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: CURRENCY
+                  optional: true
           readinessProbe:
             grpc:
               port: 50053

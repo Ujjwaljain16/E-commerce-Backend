@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -37,6 +38,10 @@ func run(ctx context.Context, log *logger.Logger) error {
 	metricsPort := getEnv("METRICS_PORT", "9092")
 	catalogAddr := getEnv("CATALOG_SERVICE_ADDR", "localhost:50052")
 	brokers := kafka.Brokers(getEnv("KAFKA_BROKERS", "localhost:9092"))
+	currency := strings.ToUpper(getEnv("CURRENCY", order.DefaultCurrency))
+	if !validCurrency(currency) {
+		return fmt.Errorf("CURRENCY must be a 3-letter ISO 4217 code, got %q", currency)
+	}
 
 	db, err := database.Open(ctx, dbURL)
 	if err != nil {
@@ -75,7 +80,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}()
 
 	srv := server.New("order-service", log, port, metricsPort, db.PingContext)
-	pb.RegisterOrderServiceServer(srv.GRPC, order.NewService(repo, catalogpb.NewCatalogServiceClient(conn), log))
+	pb.RegisterOrderServiceServer(srv.GRPC, order.NewService(repo, catalogpb.NewCatalogServiceClient(conn), log).WithCurrency(currency))
 	err = srv.Run(ctx)
 	wg.Wait()
 	return err
@@ -86,4 +91,16 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func validCurrency(code string) bool {
+	if len(code) != 3 {
+		return false
+	}
+	for _, c := range code {
+		if c < 'A' || c > 'Z' {
+			return false
+		}
+	}
+	return true
 }

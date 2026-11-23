@@ -264,7 +264,24 @@ func (r *mutationResolver) RefundPayment(ctx context.Context, paymentID string, 
 	if err != nil {
 		return nil, err
 	}
-	return toPayment(resp.GetPayment()), nil
+	return r.payment(resp.GetPayment()), nil
+}
+
+// ConfirmPayment is the resolver for the confirmPayment field.
+func (r *mutationResolver) ConfirmPayment(ctx context.Context, orderID string, razorpayPaymentID string, razorpaySignature string) (*Payment, error) {
+	if razorpayPaymentID == "" || razorpaySignature == "" {
+		return nil, badInput("razorpayPaymentId and razorpaySignature are required")
+	}
+	if _, err := r.ownedOrder(ctx, orderID); err != nil {
+		return nil, err
+	}
+	resp, err := r.PaymentSvc.ConfirmPayment(ctx, &paymentpb.ConfirmPaymentRequest{
+		OrderId: orderID, ProviderPaymentId: razorpayPaymentID, Signature: razorpaySignature,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r.payment(resp.GetPayment()), nil
 }
 
 // Me is the resolver for the me field.
@@ -370,7 +387,7 @@ func (r *queryResolver) PaymentForOrder(ctx context.Context, orderID string) (*P
 	if err != nil {
 		return nil, err
 	}
-	return toPayment(resp.GetPayment()), nil
+	return r.payment(resp.GetPayment()), nil
 }
 
 // MyPayments is the resolver for the myPayments field.
@@ -387,7 +404,11 @@ func (r *queryResolver) MyPayments(ctx context.Context, page *int32, pageSize *i
 	if err != nil {
 		return nil, err
 	}
-	return &PaymentPage{Items: toPayments(resp.GetPayments()), Total: resp.GetTotal(), Page: p, PageSize: size}, nil
+	items := make([]*Payment, 0, len(resp.GetPayments()))
+	for _, p := range resp.GetPayments() {
+		items = append(items, r.payment(p))
+	}
+	return &PaymentPage{Items: items, Total: resp.GetTotal(), Page: p, PageSize: size}, nil
 }
 
 // MyNotifications is the resolver for the myNotifications field.

@@ -52,6 +52,10 @@ func run() error {
 	brokers := kafka.Brokers(getEnv("KAFKA_BROKERS", "localhost:9092"))
 	port := getEnv("PORT", "50054")
 	metricsPort := getEnv("METRICS_PORT", "9093")
+	providerCfg, err := payment.LoadProviderConfig(os.Getenv)
+	if err != nil {
+		return fail("Invalid payment provider configuration", err)
+	}
 
 	db, err := database.Open(ctx, dbURL)
 	if err != nil {
@@ -74,6 +78,13 @@ func run() error {
 	defer consumer.Close()
 
 	service := payment.NewService(payment.NewRepository(db), payment.MockProcessor{}, log)
+	if providerCfg.Provider == payment.ProviderRazorpay {
+		rp, err := payment.NewRazorpay(providerCfg.Razorpay)
+		if err != nil {
+			return fail("Invalid Razorpay configuration", err)
+		}
+		service.UseRazorpay(rp, providerCfg.Timeout)
+	}
 
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		metrics.UnaryServerInterceptor(serviceName),
@@ -99,7 +110,12 @@ func run() error {
 
 	var wg sync.WaitGroup
 	serveErr := make(chan error, 2)
-	wg.Add(2)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		// A no-op for the mock provider, whose payments never wait for a customer.
+		service.RunExpirySweeper(ctx, time.Minute)
+	}()
 	go func() {
 		defer wg.Done()
 		outbox.NewRelay(db, payment.OutboxTable, producer, log).Run(ctx)
@@ -121,7 +137,9 @@ func run() error {
 		}
 	}()
 
-	log.Info(ctx, "Payment Service listening", map[string]interface{}{"port": port, "metrics_port": metricsPort})
+	log.Info(ctx, "Payment Service listening", map[string]interface{}{
+		"port": port, "metrics_port": metricsPort, "provider": providerCfg.Provider,
+	})
 
 	var runErr error
 	select {
