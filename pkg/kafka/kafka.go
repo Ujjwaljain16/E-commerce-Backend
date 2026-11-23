@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
@@ -61,6 +62,35 @@ func (p *Producer) Publish(ctx context.Context, topic, key string, value []byte)
 	return err
 }
 
+// Message is one record to publish.
+type Message struct {
+	Topic string
+	Key   string
+	Value []byte
+}
+
+// BatchPublisher publishes many messages in one round trip.
+type BatchPublisher interface {
+	PublishBatch(ctx context.Context, msgs []Message) error
+}
+
+// PublishBatch writes all messages and blocks until every one is acknowledged. Order is kept
+// within each partition. On error some messages may still have been written, so callers retry
+// the whole batch and rely on consumers being idempotent.
+func (p *Producer) PublishBatch(ctx context.Context, msgs []Message) error {
+	km := make([]kafkago.Message, len(msgs))
+	for i, m := range msgs {
+		km[i] = kafkago.Message{Topic: m.Topic, Key: []byte(m.Key), Value: m.Value}
+	}
+	if err := p.w.WriteMessages(ctx, km...); err != nil {
+		return err
+	}
+	for _, m := range msgs {
+		metrics.KafkaMessagesProduced.WithLabelValues(p.service, m.Topic).Inc()
+	}
+	return nil
+}
+
 // Close flushes and closes the writer.
 func (p *Producer) Close() error { return p.w.Close() }
 
@@ -75,14 +105,17 @@ type ConsumerConfig struct {
 	Topics      []string
 	Service     string
 	MaxAttempts int
+	// Concurrency is how many group members this process runs. Each partition is still read by
+	// exactly one member, so per-key ordering holds; more members than partitions sit idle.
+	Concurrency int
 }
 
 // Consumer reads from a consumer group and commits only after the handler succeeds (or the message is dead-lettered).
 type Consumer struct {
-	r   *kafkago.Reader
-	dlq *Producer
-	cfg ConsumerConfig
-	log *logger.Logger
+	readers []*kafkago.Reader
+	dlq     *Producer
+	cfg     ConsumerConfig
+	log     *logger.Logger
 }
 
 // NewConsumer creates a consumer group reader.
@@ -90,23 +123,31 @@ func NewConsumer(cfg ConsumerConfig, log *logger.Logger) *Consumer {
 	if cfg.MaxAttempts <= 0 {
 		cfg.MaxAttempts = 5
 	}
-	return &Consumer{
+	if cfg.Concurrency <= 0 {
+		cfg.Concurrency = 3
+	}
+	c := &Consumer{
 		cfg: cfg,
 		log: log,
 		dlq: NewProducer(cfg.Brokers, cfg.Service),
-		r: kafkago.NewReader(kafkago.ReaderConfig{
-			Brokers:        cfg.Brokers,
-			GroupID:        cfg.GroupID,
-			GroupTopics:    cfg.Topics,
-			MinBytes:       1,
-			MaxBytes:       10e6,
-			MaxWait:        500 * time.Millisecond,
-			StartOffset:    kafkago.FirstOffset,
-			CommitInterval: 0,
+	}
+	for i := 0; i < cfg.Concurrency; i++ {
+		c.readers = append(c.readers, kafkago.NewReader(kafkago.ReaderConfig{
+			Brokers:     cfg.Brokers,
+			GroupID:     cfg.GroupID,
+			GroupTopics: cfg.Topics,
+			MinBytes:    1,
+			MaxBytes:    10e6,
+			MaxWait:     500 * time.Millisecond,
+			StartOffset: kafkago.FirstOffset,
+			// Offsets are committed in the background once a second instead of one round trip per
+			// message. A crash replays at most a second of messages; handlers are idempotent.
+			CommitInterval: time.Second,
 			// Without this a group that joined before a topic existed never gets its partitions.
 			WatchPartitionChanges: true,
-		}),
+		}))
 	}
+	return c
 }
 
 // EnsureTopics creates any missing topics with the broker's default partition count and
@@ -134,7 +175,7 @@ func EnsureTopics(ctx context.Context, brokers []string, topics ...string) error
 	if dl, ok := ctx.Deadline(); ok {
 		_ = cc.SetDeadline(dl)
 	}
-	cfgs :=make([]kafkago.TopicConfig, len(topics))
+	cfgs := make([]kafkago.TopicConfig, len(topics))
 	for i, t := range topics {
 		cfgs[i] = kafkago.TopicConfig{Topic: t, NumPartitions: -1, ReplicationFactor: -1}
 	}
@@ -165,16 +206,29 @@ func (c *Consumer) Run(ctx context.Context, h Handler) error {
 		case <-time.After(2 * time.Second):
 		}
 	}
+	var wg sync.WaitGroup
+	for _, r := range c.readers {
+		wg.Add(1)
+		go func(r *kafkago.Reader) {
+			defer wg.Done()
+			c.consume(ctx, r, h)
+		}(r)
+	}
+	wg.Wait()
+	return nil
+}
+
+func (c *Consumer) consume(ctx context.Context, r *kafkago.Reader, h Handler) {
 	for {
-		msg, err := c.r.FetchMessage(ctx)
+		msg, err := r.FetchMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return
 			}
 			c.log.Error(ctx, "kafka fetch failed", map[string]interface{}{"error": err.Error()})
 			select {
 			case <-ctx.Done():
-				return nil
+				return
 			case <-time.After(time.Second):
 			}
 			continue
@@ -182,10 +236,10 @@ func (c *Consumer) Run(ctx context.Context, h Handler) error {
 
 		outcome := c.handle(ctx, h, msg)
 		if ctx.Err() != nil {
-			return nil
+			return
 		}
 		metrics.KafkaMessagesConsumed.WithLabelValues(c.cfg.Service, msg.Topic, outcome).Inc()
-		if err := c.r.CommitMessages(ctx, msg); err != nil && ctx.Err() == nil {
+		if err := r.CommitMessages(ctx, msg); err != nil && ctx.Err() == nil {
 			c.log.Error(ctx, "kafka commit failed", map[string]interface{}{"error": err.Error(), "topic": msg.Topic})
 		}
 	}
@@ -223,7 +277,11 @@ func (c *Consumer) handle(ctx context.Context, h Handler, msg kafkago.Message) s
 
 // Close closes the reader and the dead-letter producer.
 func (c *Consumer) Close() error {
-	return errors.Join(c.r.Close(), c.dlq.Close())
+	errs := []error{c.dlq.Close()}
+	for _, r := range c.readers {
+		errs = append(errs, r.Close())
+	}
+	return errors.Join(errs...)
 }
 
 // ErrSkip marks a message that can never succeed (e.g. malformed JSON) so it is committed without retries.
