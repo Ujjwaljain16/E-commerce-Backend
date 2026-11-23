@@ -3,12 +3,12 @@ package account
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
 	_ "github.com/lib/pq"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -63,7 +63,7 @@ func setupIntegrationTest(t *testing.T) (*Service, func()) {
 	if jwtSecret == "" {
 		jwtSecret = "test-secret-key-for-testing-only"
 	}
-	service := NewService(repo, jwtSecret)
+	service := NewService(repo, NewPostgresTokenStore(db), jwtSecret)
 
 	// Cleanup function
 	cleanup := func() {
@@ -77,35 +77,9 @@ func setupIntegrationTest(t *testing.T) (*Service, func()) {
 }
 
 // runMigrations applies database schema
+// runMigrations applies the same embedded migrations the service runs at startup.
 func runMigrations(db *sql.DB) error {
-	// Create accounts table
-	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS accounts (
-			id UUID PRIMARY KEY,
-			email VARCHAR(255) UNIQUE NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			phone VARCHAR(20),
-			is_verified BOOLEAN DEFAULT FALSE,
-			is_active BOOLEAN DEFAULT TRUE,
-			role VARCHAR(20) NOT NULL DEFAULT 'USER',
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			deleted_at TIMESTAMP,
-			CONSTRAINT accounts_role_check CHECK (role IN ('USER', 'ADMIN'))
-		);
-	`
-	if _, err := db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create accounts table: %w", err)
-	}
-
-	// Create index on role
-	createIndexSQL := `CREATE INDEX IF NOT EXISTS idx_accounts_role ON accounts(role);`
-	if _, err := db.Exec(createIndexSQL); err != nil {
-		return fmt.Errorf("failed to create role index: %w", err)
-	}
-
-	return nil
+	return database.Migrate(context.Background(), db, Migrations, "migrations", "account_schema_migrations")
 }
 
 func TestIntegration_RegisterAndLogin(t *testing.T) {

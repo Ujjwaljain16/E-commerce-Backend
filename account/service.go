@@ -19,15 +19,33 @@ import (
 type Service struct {
 	pb.UnimplementedAccountServiceServer
 	repo         Repository
+	tokens       TokenStore
 	tokenService *auth.TokenService
 }
 
 // NewService creates a new account service
-func NewService(repo Repository, jwtSecret string) *Service {
+func NewService(repo Repository, tokens TokenStore, jwtSecret string) *Service {
 	return &Service{
 		repo:         repo,
+		tokens:       tokens,
 		tokenService: auth.NewTokenService(jwtSecret, 15*time.Minute, 7*24*time.Hour),
 	}
+}
+
+// issueTokens signs a token pair and records the refresh token so it can be rotated and revoked.
+func (s *Service) issueTokens(ctx context.Context, a *Account) (string, string, error) {
+	access, refresh, err := s.tokenService.GenerateTokenPair(a.ID, a.Email, a.Role)
+	if err != nil {
+		return "", "", err
+	}
+	claims, err := s.tokenService.ValidateRefreshToken(refresh)
+	if err != nil {
+		return "", "", err
+	}
+	if err := s.tokens.Save(ctx, claims.ID, a.ID, claims.ExpiresAt.Time); err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
 }
 
 // Register creates a new user account
@@ -53,8 +71,7 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		return nil, status.Error(codes.Internal, "failed to create account")
 	}
 
-	// Generate tokens using auth package with account role
-	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, account.Role)
+	accessToken, refreshToken, err := s.issueTokens(ctx, account)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -91,8 +108,7 @@ func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginRes
 		return nil, status.Error(codes.Internal, "failed to verify credentials")
 	}
 
-	// Generate tokens using auth package with account role
-	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(account.ID, account.Email, account.Role)
+	accessToken, refreshToken, err := s.issueTokens(ctx, account)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -208,6 +224,10 @@ func (s *Service) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequ
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to update password")
 	}
+	// A password change should log out every other session.
+	if err := s.tokens.RevokeAll(ctx, req.UserId); err != nil {
+		return nil, status.Error(codes.Internal, "password changed but sessions could not be revoked")
+	}
 
 	return &pb.ChangePasswordResponse{
 		Success: true,
@@ -227,6 +247,9 @@ func (s *Service) DeleteAccount(ctx context.Context, req *pb.DeleteAccountReques
 			return nil, status.Error(codes.NotFound, "account not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to delete account")
+	}
+	if err := s.tokens.RevokeAll(ctx, req.UserId); err != nil {
+		return nil, status.Error(codes.Internal, "account deleted but sessions could not be revoked")
 	}
 
 	return &pb.DeleteAccountResponse{
@@ -269,8 +292,29 @@ func (s *Service) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest)
 		return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
 	}
 
-	// Generate new tokens using auth package
-	accessToken, refreshToken, err := s.tokenService.GenerateTokenPair(claims.UserID, claims.Email, claims.Role)
+	// Refresh tokens are single use: each refresh rotates to a new one.
+	owner, err := s.tokens.Consume(ctx, claims.ID)
+	switch {
+	case errors.Is(err, ErrRefreshTokenReused):
+		return nil, status.Error(codes.Unauthenticated, "refresh token already used; all sessions were signed out")
+	case errors.Is(err, ErrRefreshTokenUnknown):
+		return nil, status.Error(codes.Unauthenticated, "refresh token revoked")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "failed to check refresh token")
+	case owner != claims.UserID:
+		return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+	}
+
+	// Re-read the account so deactivation and role changes take effect at the next refresh.
+	account, err := s.repo.GetByID(ctx, claims.UserID)
+	if errors.Is(err, ErrAccountNotFound) {
+		return nil, status.Error(codes.Unauthenticated, "account no longer active")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load account")
+	}
+
+	accessToken, refreshToken, err := s.issueTokens(ctx, account)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to generate tokens")
 	}
@@ -279,6 +323,22 @@ func (s *Service) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest)
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+// Logout revokes a refresh token. Access tokens stay valid until they expire (15 minutes).
+func (s *Service) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutResponse, error) {
+	if req.RefreshToken == "" {
+		return nil, status.Error(codes.InvalidArgument, "refresh_token is required")
+	}
+	claims, err := s.tokenService.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		// Expired or invalid tokens can't be used anyway; logging out is still a success.
+		return &pb.LogoutResponse{Success: true}, nil
+	}
+	if err := s.tokens.Revoke(ctx, claims.ID); err != nil {
+		return nil, status.Error(codes.Internal, "failed to log out")
+	}
+	return &pb.LogoutResponse{Success: true}, nil
 }
 
 // EnsureAdmin creates the bootstrap admin account if it does not exist yet. Registration never

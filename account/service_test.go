@@ -96,7 +96,7 @@ func TestService_Register_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.RegisterRequest{
@@ -127,7 +127,7 @@ func TestService_Register_Success(t *testing.T) {
 
 func TestService_Register_MissingEmail(t *testing.T) {
 	mockRepo := &mockRepository{}
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.RegisterRequest{
@@ -154,7 +154,7 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.RegisterRequest{
@@ -191,7 +191,7 @@ func TestService_Login_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.LoginRequest{
@@ -219,7 +219,7 @@ func TestService_Login_InvalidCredentials(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.LoginRequest{
@@ -255,7 +255,7 @@ func TestService_GetProfile_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.GetProfileRequest{
@@ -279,7 +279,7 @@ func TestService_GetProfile_NotFound(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.GetProfileRequest{
@@ -314,7 +314,7 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.UpdateProfileRequest{
@@ -354,7 +354,7 @@ func TestService_ChangePassword_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.ChangePasswordRequest{
@@ -383,7 +383,7 @@ func TestService_ChangePassword_WrongOldPassword(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.ChangePasswordRequest{
@@ -410,7 +410,7 @@ func TestService_DeleteAccount_Success(t *testing.T) {
 		},
 	}
 
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.DeleteAccountRequest{
@@ -425,7 +425,7 @@ func TestService_DeleteAccount_Success(t *testing.T) {
 
 func TestService_VerifyToken_ValidToken(t *testing.T) {
 	mockRepo := &mockRepository{}
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	// Generate a valid token
@@ -453,7 +453,7 @@ func TestService_VerifyToken_ValidToken(t *testing.T) {
 
 func TestService_VerifyToken_InvalidToken(t *testing.T) {
 	mockRepo := &mockRepository{}
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.VerifyTokenRequest{
@@ -471,12 +471,13 @@ func TestService_VerifyToken_InvalidToken(t *testing.T) {
 }
 
 func TestService_RefreshToken_Success(t *testing.T) {
-	mockRepo := &mockRepository{}
-	service := NewService(mockRepo, "test-secret")
+	acct := &Account{ID: "user-123", Email: "test@example.com", Role: "USER", IsActive: true}
+	mockRepo := &mockRepository{getByIDFunc: func(context.Context, string) (*Account, error) { return acct, nil }}
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
-	// Generate a valid refresh token
-	_, refreshToken, err := service.tokenService.GenerateTokenPair("user-123", "test@example.com", "USER")
+	// Issue a refresh token the way Login does, so the token store knows it
+	_, refreshToken, err := service.issueTokens(ctx, acct)
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
@@ -500,7 +501,7 @@ func TestService_RefreshToken_Success(t *testing.T) {
 
 func TestService_RefreshToken_InvalidToken(t *testing.T) {
 	mockRepo := &mockRepository{}
-	service := NewService(mockRepo, "test-secret")
+	service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 	ctx := context.Background()
 
 	req := &pb.RefreshTokenRequest{
@@ -548,7 +549,7 @@ func TestService_AllEndpoints_Coverage(t *testing.T) {
 					}, nil
 				},
 			}
-			service := NewService(mockRepo, "test-secret")
+			service := NewService(mockRepo, newMemTokenStore(), "test-secret")
 			tt.testFunc(t, service)
 		})
 	}

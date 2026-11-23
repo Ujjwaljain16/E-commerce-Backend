@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/account"
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
@@ -44,7 +46,8 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}
 	log.Info(ctx, "database ready", nil)
 
-	service := account.NewService(account.NewRepository(db), jwtSecret)
+	service := account.NewService(account.NewRepository(db), account.NewPostgresTokenStore(db), jwtSecret)
+	go pruneRefreshTokens(ctx, db, log)
 	if email, password := os.Getenv("ADMIN_EMAIL"), os.Getenv("ADMIN_PASSWORD"); email != "" {
 		if err := service.EnsureAdmin(ctx, email, password); err != nil {
 			return err
@@ -55,6 +58,26 @@ func run(ctx context.Context, log *logger.Logger) error {
 	srv := server.New("account-service", log, port, metricsPort, db.PingContext)
 	pb.RegisterAccountServiceServer(srv.GRPC, service)
 	return srv.Run(ctx)
+}
+
+// pruneRefreshTokens deletes long-expired refresh tokens once an hour.
+func pruneRefreshTokens(ctx context.Context, db *sql.DB, log *logger.Logger) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if n, err := account.PruneExpiredRefreshTokens(ctx, db); err != nil {
+				if ctx.Err() == nil {
+					log.Error(ctx, "refresh token prune failed", map[string]interface{}{"error": err.Error()})
+				}
+			} else if n > 0 {
+				log.Info(ctx, "expired refresh tokens pruned", map[string]interface{}{"rows": n})
+			}
+		}
+	}
 }
 
 func getEnv(key, defaultValue string) string {

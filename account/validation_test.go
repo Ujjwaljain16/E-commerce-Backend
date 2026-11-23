@@ -10,7 +10,7 @@ import (
 )
 
 func TestRegister_RejectsBadEmailAndShortPassword(t *testing.T) {
-	svc := NewService(&mockRepository{}, "test-secret")
+	svc := NewService(&mockRepository{}, newMemTokenStore(), "test-secret")
 	cases := []*pb.RegisterRequest{
 		{Email: "not-an-email", Password: "password123", Name: "A"},
 		{Email: "a@example.com", Password: "short", Name: "A"},
@@ -28,7 +28,7 @@ func TestRegister_NormalizesEmailAndForcesUserRole(t *testing.T) {
 		gotEmail, gotRole = email, role
 		return &Account{ID: "id", Email: email, Name: name, Role: role}, nil
 	}}
-	svc := NewService(repo, "test-secret")
+	svc := NewService(repo, newMemTokenStore(), "test-secret")
 	if _, err := svc.Register(context.Background(), &pb.RegisterRequest{Email: "  Bob@Example.COM ", Password: "password123", Name: "Bob"}); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestEnsureAdmin_IsIdempotent(t *testing.T) {
 		}
 		return &Account{ID: "id", Role: role}, nil
 	}}
-	svc := NewService(repo, "test-secret")
+	svc := NewService(repo, newMemTokenStore(), "test-secret")
 	for i := 0; i < 2; i++ {
 		if err := svc.EnsureAdmin(context.Background(), "admin@example.com", "admin-password"); err != nil {
 			t.Fatalf("call %d: %v", i, err)
