@@ -183,8 +183,8 @@ services:
       PAYMENT_SERVICE_ADDR: payment-service:50054
       NOTIFICATION_SERVICE_ADDR: notification-service:50055
       PLAYGROUND_ENABLED: "true"
-      RATE_LIMIT_RPS: 50
-      RATE_LIMIT_BURST: 100
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-50}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-100}
     ports:
       - "8000:8000"
     depends_on:
