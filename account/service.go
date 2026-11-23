@@ -228,7 +228,7 @@ func (s *Service) VerifyToken(ctx context.Context, req *pb.VerifyTokenRequest) (
 		return nil, status.Error(codes.InvalidArgument, "token is required")
 	}
 
-	claims, err := s.tokenService.ValidateToken(req.Token)
+	claims, err := s.tokenService.ValidateAccessToken(req.Token)
 	if err != nil {
 		return &pb.VerifyTokenResponse{
 			Valid: false,
@@ -248,7 +248,7 @@ func (s *Service) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest)
 		return nil, status.Error(codes.InvalidArgument, "refresh_token is required")
 	}
 
-	claims, err := s.tokenService.ValidateToken(req.RefreshToken)
+	claims, err := s.tokenService.ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
 		if errors.Is(err, auth.ErrTokenExpired) {
 			return nil, status.Error(codes.Unauthenticated, "refresh token expired")
