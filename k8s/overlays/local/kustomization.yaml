@@ -1,0 +1,40 @@
+# Local cluster (minikube/kind): images built locally as :dev, dev-only secrets.
+#   kubectl apply -k k8s/overlays/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ecommerce
+
+resources:
+  - ../../base
+
+# A non-latest tag keeps imagePullPolicy at IfNotPresent, so the locally loaded images are used.
+images:
+  - name: ghcr.io/ujjwaljain16/ecommerce-account
+    newName: ecommerce-account
+    newTag: dev
+  - name: ghcr.io/ujjwaljain16/ecommerce-catalog
+    newName: ecommerce-catalog
+    newTag: dev
+  - name: ghcr.io/ujjwaljain16/ecommerce-order
+    newName: ecommerce-order
+    newTag: dev
+  - name: ghcr.io/ujjwaljain16/ecommerce-payment
+    newName: ecommerce-payment
+    newTag: dev
+  - name: ghcr.io/ujjwaljain16/ecommerce-notification
+    newName: ecommerce-notification
+    newTag: dev
+  - name: ghcr.io/ujjwaljain16/ecommerce-graphql
+    newName: ecommerce-graphql
+    newTag: dev
+
+# Same dev values as docker-compose.yaml. Never use these outside a local cluster.
+secretGenerator:
+  - name: ecommerce-secrets
+    literals:
+      - POSTGRES_PASSWORD=postgres
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/ecommerce?sslmode=disable
+      - JWT_SECRET=local-dev-jwt-secret-change-me-0123456789
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=admin-password-123
+      - SMTP_FROM=shop@example.com

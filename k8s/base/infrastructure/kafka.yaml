@@ -19,6 +19,9 @@ spec:
         app: kafka
         tier: data
     spec:
+      # The image maps every KAFKA_* env var to a broker property, including the KAFKA_PORT,
+      # KAFKA_SERVICE_HOST... variables Kubernetes injects for the kafka Service.
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

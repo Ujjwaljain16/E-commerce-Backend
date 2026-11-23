@@ -84,11 +84,23 @@ make lint               # gofmt, vet, staticcheck
 ## Deploy
 
 ```bash
-kubectl -n ecommerce create secret generic ecommerce-secrets --from-env-file=secrets.env   # see k8s/infrastructure/secrets.example.yaml
+kubectl -n ecommerce create secret generic ecommerce-secrets --from-env-file=secrets.env   # see k8s/base/infrastructure/secrets.example.yaml
 kubectl apply -k k8s
 ```
 
 The manifests include probes, resource limits, restricted pod security, HPA/PDB for the gateway, catalog and order, an Ingress for the gateway and NetworkPolicies that keep backend services internal. The bundled Postgres, Kafka and Redis are single-node and meant for dev/staging.
+
+### Run on minikube
+
+The `k8s/overlays/local` overlay uses locally built `:dev` images and dev-only secrets:
+
+```bash
+minikube start -p ecommerce --driver=docker --memory=4096 --cpus=4
+for s in account catalog order payment notification graphql; do docker build -t ecommerce-$s:dev -f $s/Dockerfile . && minikube -p ecommerce image load ecommerce-$s:dev; done
+kubectl apply -k k8s/overlays/local
+kubectl -n ecommerce wait --for=condition=Available deployment --all --timeout=5m
+kubectl -n ecommerce port-forward svc/graphql-gateway 8000:8000   # forward svc/<name>-service 50051..50055 too, then: make e2e
+```
 
 CI (`.github/workflows/ci.yml`) runs lint, protobuf drift checks, race-enabled unit tests, integration tests, govulncheck, image builds with a Trivy scan, and manifest rendering. Images are pushed to GHCR from `main`.
 

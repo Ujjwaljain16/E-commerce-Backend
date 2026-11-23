@@ -1,85 +1,56 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: notification-service
+  name: payment-service
   labels:
-    app: notification-service
+    app: payment-service
     tier: backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: notification-service
+      app: payment-service
   template:
     metadata:
       labels:
-        app: notification-service
+        app: payment-service
         tier: backend
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9094"
+        prometheus.io/port: "9093"
         prometheus.io/path: /metrics
     spec:
       automountServiceAccountToken: false
       securityContext:
+        # distroless "nonroot"; the kubelet needs a numeric uid to enforce runAsNonRoot.
+        runAsUser: 65532
+        runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
       containers:
-        - name: notification
-          image: ghcr.io/ujjwaljain16/ecommerce-notification:latest
+        - name: payment
+          image: ghcr.io/ujjwaljain16/ecommerce-payment:latest
           ports:
             - name: grpc
-              containerPort: 50055
+              containerPort: 50054
             - name: metrics
-              containerPort: 9094
+              containerPort: 9093
           env:
             - name: PORT
-              value: "50055"
+              value: "50054"
             - name: METRICS_PORT
-              value: "9094"
+              value: "9093"
             - name: KAFKA_BROKERS
               value: "kafka:9092"
-            - name: ACCOUNT_SERVICE_ADDR
-              value: "account-service:50051"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ecommerce-secrets
                   key: DATABASE_URL
-            - name: SMTP_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: ecommerce-secrets
-                  key: SMTP_HOST
-                  optional: true
-            - name: SMTP_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: ecommerce-secrets
-                  key: SMTP_PORT
-                  optional: true
-            - name: SMTP_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: ecommerce-secrets
-                  key: SMTP_USERNAME
-                  optional: true
-            - name: SMTP_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ecommerce-secrets
-                  key: SMTP_PASSWORD
-                  optional: true
-            - name: SMTP_FROM
-              valueFrom:
-                secretKeyRef:
-                  name: ecommerce-secrets
-                  key: SMTP_FROM
-                  optional: true
           readinessProbe:
             grpc:
-              port: 50055
+              port: 50054
             periodSeconds: 10
           livenessProbe:
             httpGet:
@@ -104,16 +75,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: notification-service
+  name: payment-service
   labels:
-    app: notification-service
+    app: payment-service
 spec:
   selector:
-    app: notification-service
+    app: payment-service
   ports:
     - name: grpc
-      port: 50055
+      port: 50054
       targetPort: grpc
     - name: metrics
-      port: 9094
+      port: 9093
       targetPort: metrics

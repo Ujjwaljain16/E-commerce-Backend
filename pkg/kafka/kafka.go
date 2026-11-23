@@ -118,6 +118,10 @@ func EnsureTopics(ctx context.Context, brokers []string, topics ...string) error
 		return err
 	}
 	defer conn.Close()
+	// The admin calls below ignore ctx, so carry its deadline onto the connections.
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(dl)
+	}
 	controller, err := conn.Controller()
 	if err != nil {
 		return err
@@ -127,7 +131,10 @@ func EnsureTopics(ctx context.Context, brokers []string, topics ...string) error
 		return err
 	}
 	defer cc.Close()
-	cfgs := make([]kafkago.TopicConfig, len(topics))
+	if dl, ok := ctx.Deadline(); ok {
+		_ = cc.SetDeadline(dl)
+	}
+	cfgs :=make([]kafkago.TopicConfig, len(topics))
 	for i, t := range topics {
 		cfgs[i] = kafkago.TopicConfig{Topic: t, NumPartitions: -1, ReplicationFactor: -1}
 	}
@@ -140,7 +147,11 @@ func EnsureTopics(ctx context.Context, brokers []string, topics ...string) error
 // Run consumes until ctx is cancelled.
 func (c *Consumer) Run(ctx context.Context, h Handler) error {
 	for attempt := 0; ; attempt++ {
-		err := EnsureTopics(ctx, c.cfg.Brokers, c.cfg.Topics...)
+		// Bound each attempt: a dial to a broker pod that just went away otherwise waits out the
+		// kernel's SYN retries (minutes), and nothing is consumed meanwhile.
+		attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := EnsureTopics(attemptCtx, c.cfg.Brokers, c.cfg.Topics...)
+		cancel()
 		if err == nil {
 			break
 		}

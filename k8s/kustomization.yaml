@@ -1,38 +1,8 @@
 # kubectl apply -k k8s
-# Create the ecommerce-secrets Secret first (see infrastructure/secrets.example.yaml).
+# Create the ecommerce-secrets Secret first (see base/infrastructure/secrets.example.yaml).
+# The manifests live in base/ so overlays (overlays/local for minikube) can build on them.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: ecommerce
 
 resources:
-  - namespace.yaml
-  - infrastructure/network-policies.yaml
-  - infrastructure/postgres.yaml
-  - infrastructure/kafka.yaml
-  - infrastructure/redis.yaml
-  - account/deployment.yaml
-  - catalog/deployment.yaml
-  - order/deployment.yaml
-  - payment/deployment.yaml
-  - notification/deployment.yaml
-  - graphql/deployment.yaml
-
-labels:
-  - pairs:
-      app.kubernetes.io/part-of: ecommerce
-    includeSelectors: false
-
-# The deploy workflow pins these to the commit SHA with `kustomize edit set image`.
-images:
-  - name: ghcr.io/ujjwaljain16/ecommerce-account
-    newTag: latest
-  - name: ghcr.io/ujjwaljain16/ecommerce-catalog
-    newTag: latest
-  - name: ghcr.io/ujjwaljain16/ecommerce-order
-    newTag: latest
-  - name: ghcr.io/ujjwaljain16/ecommerce-payment
-    newTag: latest
-  - name: ghcr.io/ujjwaljain16/ecommerce-notification
-    newTag: latest
-  - name: ghcr.io/ujjwaljain16/ecommerce-graphql
-    newTag: latest
+  - base
