@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package notification;
+
+option go_package = "github.com/Ujjwaljain16/E-commerce-Backend/notification/pb";
+
+import "google/protobuf/timestamp.proto";
+
+message Notification {
+    string id = 1;
+    string user_id = 2;
+    string event_id = 3;
+    string type = 4;      // e.g. order.created
+    string channel = 5;   // EMAIL
+    string recipient = 6;
+    string subject = 7;
+    string body = 8;
+    string status = 9;    // SENT or FAILED
+    google.protobuf.Timestamp created_at = 10;
+}
+
+message ListNotificationsRequest {
+    string user_id = 1;
+    int32 page = 2;
+    int32 page_size = 3;
+}
+
+message ListNotificationsResponse {
+    repeated Notification notifications = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// NotificationService exposes the history of notifications sent in response to order events.
+service NotificationService {
+    rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+}
