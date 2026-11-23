@@ -1,0 +1,121 @@
+# Decisions
+
+Short record of the architectural choices in this repo and why. Newest last.
+
+## 1. Choreographed saga over Kafka for checkout
+
+**Decision.** Checkout is an event-driven saga, not a synchronous call chain.
+
+```
+gateway ──createOrder──▶ order ──ReserveStock (gRPC)──▶ catalog
+                           │
+                           └─ order.created ─▶ payment ─ payment.succeeded ─▶ order ─ order.confirmed ─▶ notification
+                                                       └ payment.failed ───▶ order ─ order.cancelled ─▶ catalog (release stock)
+                                                                                                    ├▶ payment (refund / mark cancelled)
+                                                                                                    └▶ notification
+```
+
+**Why.** Payment can be slow or down without blocking order creation, every step can be retried
+independently, and new consumers (notification) plug in without touching the order service.
+Stock is reserved synchronously because the customer needs an immediate "out of stock" answer.
+
+**Trade-off.** The order is `PENDING` for a moment after `createOrder` returns; clients poll `order(id)`.
+
+## 2. Transactional outbox for every published event
+
+**Decision.** Order and payment write events to an `*_outbox` table in the same transaction as the
+state change; a relay (`pkg/outbox`) publishes them and marks them sent. `FOR UPDATE SKIP LOCKED`
+lets multiple replicas run the relay.
+
+**Why.** Writing to Postgres and Kafka separately loses events (crash between the two) or publishes
+events for rolled-back changes. The outbox makes "state changed" and "event will be published" atomic.
+
+**Trade-off.** Delivery is at-least-once, so every consumer is idempotent (see 3).
+
+## 3. Idempotency everywhere instead of exactly-once
+
+- Catalog: one `stock_reservations` row per order; `ReserveStock` returns the existing reservation on retry, `ReleaseStock` is a no-op once released.
+- Payment: `order_id` and `idempotency_key` are unique; a late `order.created` for an already-cancelled order finds a `CANCELLED` row and does nothing.
+- Order: payment results only apply to `PENDING` orders (`UPDATE ... WHERE status = PENDING`).
+- Notification: `event_id` is unique, so redelivered events never send a second email.
+
+Consumers retry with backoff, then park poison messages on `<topic>.dlq` so one bad message cannot block a partition. Messages are keyed by order ID, so all events of one order stay ordered within a topic.
+
+## 4. Server-side pricing
+
+**Decision.** `CreateOrder` ignores client-supplied prices and names. Catalog returns the authoritative
+name and unit price as part of `ReserveStock`, and the order stores those.
+
+**Why.** The original implementation trusted the client's price, which let anyone buy anything for 0.01.
+
+## 5. One Postgres database, schema owned per service
+
+**Decision.** All services share one Postgres instance/database in dev, but each owns its tables and
+runs its own embedded migrations at startup, tracked in its own `<service>_schema_migrations` table
+(`pkg/database`). Services never read each other's tables.
+
+**Why.** Keeps local and small deployments cheap while preserving the "database per service" boundary
+logically; splitting into separate databases later is a connection-string change.
+
+The migration runner is ~100 lines and uses a Postgres advisory lock so replicas starting together
+don't race. `golang-migrate` was tried and rejected: it pulled the module to Go 1.26 and a newer gRPC.
+
+## 6. Authentication at the gateway, trusted internal network
+
+**Decision.** The GraphQL gateway validates JWTs (HS256, `pkg/auth`) and passes the caller's user ID
+to backend services. Services do not re-validate tokens. In Kubernetes, NetworkPolicies make the
+gateway the only pod reachable from outside the namespace.
+
+- Access and refresh tokens carry a `typ` claim and are not interchangeable (previously a refresh token worked as an access token for 7 days).
+- Self-registration always creates `USER`; the first `ADMIN` is bootstrapped from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+- Ownership checks live in the gateway; another user's order returns `NOT_FOUND`, not `FORBIDDEN`, so IDs can't be probed.
+- `JWT_SECRET` is required (32+ chars); there is no default secret anymore.
+
+**Trade-off.** A compromised pod inside the namespace could call services directly. mTLS (service mesh) is the next step if that matters.
+
+## 7. Postgres full-text search instead of Elasticsearch
+
+**Decision.** Product search uses a generated, weighted `tsvector` column with a GIN index and
+`websearch_to_tsquery`, ranked by `ts_rank`.
+
+**Why.** Good relevance for a catalog this size, no extra cluster to run or keep in sync, and it fits a
+16 GB dev machine. Revisit if search needs typo tolerance, facets or multi-language analysis.
+
+## 8. Redis as a read-through cache only
+
+**Decision.** Catalog caches `GetProduct` for 5 minutes and invalidates on update, delete, reservation
+and release. Any Redis error falls through to Postgres. Redis runs without persistence and with LRU eviction.
+
+**Why.** Product reads dominate; correctness never depends on the cache. Listing/search are not cached
+because invalidation would be broad for little gain at this scale.
+
+## 9. Mock payment provider behind an interface
+
+**Decision.** `payment.Processor` has a mock implementation that declines `card_declined` and amounts
+over 10,000. A real provider (e.g. Stripe) is a new implementation of the same interface, using our
+idempotency key as the provider's idempotency key.
+
+## 10. gRPC between services, GraphQL at the edge
+
+Kept from the original design: protobuf contracts per service (generated with `buf`, checked for drift
+in CI), GraphQL (gqlgen) for clients. The gateway adds per-IP rate limiting (in-memory token bucket per
+replica), a query complexity limit, a 1 MB body limit and maps gRPC codes to GraphQL error codes without
+leaking internal messages. Playground and introspection are off unless `PLAYGROUND_ENABLED=true`.
+
+Rate limits are per replica; with N gateway replicas the effective limit is roughly N× higher. A shared
+Redis limiter is the upgrade path if that matters.
+
+## 11. Money as `double` (known limitation)
+
+The existing protos use `double` for prices and Postgres stores `DECIMAL(10,2)`. Totals are rounded to
+cents. Moving to integer minor units (`int64` cents) is the right fix but is a breaking API change across
+every service, so it is deferred.
+
+## 12. Operations
+
+- **Images:** multi-stage builds, distroless `nonroot` runtime, static binaries (`CGO_ENABLED=0`, `-trimpath`).
+- **Health:** each service serves `/metrics` and `/healthz` (DB ping) on its metrics port; the gRPC health status follows the same check, and Kubernetes uses native gRPC readiness probes.
+- **Shutdown:** SIGTERM drains in-flight RPCs (10s cap), stops consumers and the outbox relay, then closes the DB.
+- **Observability:** Prometheus metrics for gRPC/HTTP rate, errors and latency, Kafka produced/consumed/dead-lettered, and cache hit ratio; alert rules and a Grafana dashboard live in `monitoring/`. Logs are structured JSON on stdout, ready for any log collector (ELK, Loki) without coupling services to one.
+- **Kubernetes:** kustomize manifests with resource limits, restricted pod security, HPA + PDB on the hot path (gateway, catalog, order). The bundled Postgres/Kafka/Redis are single-node for dev/staging; production should use managed services.
+- **CI:** gofmt, vet, staticcheck, protobuf drift, race-enabled unit tests, testcontainers integration tests, govulncheck, image build + Trivy scan, manifest rendering. Images are pushed to GHCR only from `main`.
