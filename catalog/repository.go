@@ -18,7 +18,7 @@ type Product struct {
 	ID          string
 	Name        string
 	Description string
-	Price       float64
+	PriceCents  int64
 	SKU         string
 	Stock       int32
 	Images      []string
@@ -66,9 +66,9 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 	product.UpdatedAt = time.Now()
 
 	query := `
-		INSERT INTO products (id, name, description, price, sku, stock, images, category, created_at, updated_at)
+		INSERT INTO products (id, name, description, price_cents, sku, stock, images, category, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at
+		RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 	`
 
 	var images pq.StringArray
@@ -78,7 +78,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 		product.ID,
 		product.Name,
 		product.Description,
-		product.Price,
+		product.PriceCents,
 		product.SKU,
 		product.Stock,
 		pq.Array(product.Images),
@@ -89,7 +89,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -111,7 +111,7 @@ func (r *postgresRepository) Create(ctx context.Context, product *Product) (*Pro
 // GetByID retrieves a product by ID
 func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, error) {
 	query := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
 		WHERE id = $1
 	`
@@ -123,7 +123,7 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -149,7 +149,7 @@ func (r *postgresRepository) GetByID(ctx context.Context, id string) (*Product, 
 // GetBySKU retrieves a product by SKU
 func (r *postgresRepository) GetBySKU(ctx context.Context, sku string) (*Product, error) {
 	query := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
 		WHERE sku = $1
 	`
@@ -161,7 +161,7 @@ func (r *postgresRepository) GetBySKU(ctx context.Context, sku string) (*Product
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -205,7 +205,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 
 	if category != "" {
 		query = `
-			SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+			SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 			FROM products
 			WHERE category = $1
 			ORDER BY created_at DESC
@@ -215,7 +215,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 		args = []interface{}{category, pageSize, offset}
 	} else {
 		query = `
-			SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+			SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 			FROM products
 			ORDER BY created_at DESC
 			LIMIT $1 OFFSET $2
@@ -253,7 +253,7 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 			&product.ID,
 			&product.Name,
 			&product.Description,
-			&product.Price,
+			&product.PriceCents,
 			&product.SKU,
 			&product.Stock,
 			&images,
@@ -283,9 +283,9 @@ func (r *postgresRepository) List(ctx context.Context, page, pageSize int32, cat
 func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Product, error) {
 	query := `
 		UPDATE products
-		SET name = $1, description = $2, price = $3, stock = $4, images = $5, category = $6, updated_at = $7
+		SET name = $1, description = $2, price_cents = $3, stock = $4, images = $5, category = $6, updated_at = $7
 		WHERE id = $8
-		RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at
+		RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 	`
 
 	product.UpdatedAt = time.Now()
@@ -296,7 +296,7 @@ func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Pro
 		query,
 		product.Name,
 		product.Description,
-		product.Price,
+		product.PriceCents,
 		product.Stock,
 		pq.Array(product.Images),
 		product.Category,
@@ -306,7 +306,7 @@ func (r *postgresRepository) Update(ctx context.Context, product *Product) (*Pro
 		&product.ID,
 		&product.Name,
 		&product.Description,
-		&product.Price,
+		&product.PriceCents,
 		&product.SKU,
 		&product.Stock,
 		&images,
@@ -389,7 +389,7 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 
 	// Search products
 	searchQuery := `
-		SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+		SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 		FROM products
 		WHERE search_vector @@ websearch_to_tsquery('english', $1)
 		ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC, created_at DESC
@@ -412,7 +412,7 @@ func (r *postgresRepository) Search(ctx context.Context, query string, page, pag
 			&product.ID,
 			&product.Name,
 			&product.Description,
-			&product.Price,
+			&product.PriceCents,
 			&product.SKU,
 			&product.Stock,
 			&images,

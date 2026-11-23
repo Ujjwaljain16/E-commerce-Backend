@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/payment/pb"
@@ -55,7 +54,7 @@ func NewService(repo Repository, processor Processor, log *logger.Logger) *Servi
 type ProcessInput struct {
 	OrderID        string
 	UserID         string
-	Amount         float64
+	AmountCents    int64
 	Currency       string
 	Method         string
 	IdempotencyKey string
@@ -70,8 +69,8 @@ func (s *Service) Process(ctx context.Context, in ProcessInput) (*Payment, error
 	if err := requireUUID("user_id", in.UserID); err != nil {
 		return nil, err
 	}
-	if in.Amount <= 0 || math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
-		return nil, invalid("amount must be greater than zero")
+	if in.AmountCents <= 0 {
+		return nil, invalid("amount_cents must be greater than zero")
 	}
 	currency := strings.ToUpper(strings.TrimSpace(in.Currency))
 	if currency == "" {
@@ -95,7 +94,7 @@ func (s *Service) Process(ctx context.Context, in ProcessInput) (*Payment, error
 		ID:             uuid.NewString(),
 		OrderID:        in.OrderID,
 		UserID:         in.UserID,
-		Amount:         math.Round(in.Amount*100) / 100,
+		AmountCents:    in.AmountCents,
 		Currency:       currency,
 		Status:         StatusPending,
 		Method:         in.Method,
@@ -122,7 +121,7 @@ func (s *Service) charge(ctx context.Context, p *Payment) (*Payment, error) {
 	ref, err := s.processor.Charge(ctx, ChargeRequest{
 		PaymentID:      p.ID,
 		OrderID:        p.OrderID,
-		Amount:         p.Amount,
+		AmountCents:    p.AmountCents,
 		Currency:       p.Currency,
 		Method:         p.Method,
 		IdempotencyKey: p.IdempotencyKey,
@@ -168,7 +167,7 @@ func (s *Service) Refund(ctx context.Context, paymentID, reason string) (*Paymen
 		return nil, ErrNotRefundable
 	}
 	if err := s.processor.Refund(ctx, RefundRequest{
-		ProviderRef: p.ProviderRef, Amount: p.Amount, Currency: p.Currency, Reason: reason,
+		ProviderRef: p.ProviderRef, AmountCents: p.AmountCents, Currency: p.Currency, Reason: reason,
 	}); err != nil {
 		return nil, fmt.Errorf("refund payment %s: %w", p.ID, err)
 	}
@@ -237,13 +236,13 @@ func (s *Service) CancelOrder(ctx context.Context, orderID, userID, reason strin
 
 func paymentEvent(p *Payment, reason string) events.Payment {
 	return events.Payment{
-		Meta:      events.NewMeta(),
-		PaymentID: p.ID,
-		OrderID:   p.OrderID,
-		UserID:    p.UserID,
-		Amount:    p.Amount,
-		Currency:  p.Currency,
-		Reason:    reason,
+		Meta:        events.NewMeta(),
+		PaymentID:   p.ID,
+		OrderID:     p.OrderID,
+		UserID:      p.UserID,
+		AmountCents: p.AmountCents,
+		Currency:    p.Currency,
+		Reason:      reason,
 	}
 }
 
@@ -262,7 +261,7 @@ func (s *Service) ProcessPayment(ctx context.Context, req *pb.ProcessPaymentRequ
 	p, err := s.Process(ctx, ProcessInput{
 		OrderID:        req.OrderId,
 		UserID:         req.UserId,
-		Amount:         req.Amount,
+		AmountCents:    req.AmountCents,
 		Currency:       req.Currency,
 		Method:         req.Method,
 		IdempotencyKey: req.IdempotencyKey,
@@ -364,7 +363,7 @@ func toProto(p *Payment) *pb.Payment {
 		Id:             p.ID,
 		OrderId:        p.OrderID,
 		UserId:         p.UserID,
-		Amount:         p.Amount,
+		AmountCents:    p.AmountCents,
 		Currency:       p.Currency,
 		Status:         pb.PaymentStatus(p.Status),
 		Method:         p.Method,

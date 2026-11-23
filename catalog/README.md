@@ -57,7 +57,7 @@ CREATE TABLE products (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    price_cents BIGINT NOT NULL CHECK (price_cents >= 0),
     sku VARCHAR(100) UNIQUE NOT NULL,
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     images TEXT[],
@@ -193,7 +193,7 @@ go test ./catalog -v
 grpcurl -plaintext -d '{
   "name": "Laptop",
   "description": "High-performance laptop",
-  "price": 1299.99,
+  "price_cents": 129999,
   "sku": "LAPTOP-001",
   "stock": 50,
   "images": ["https://example.com/img1.jpg"],
@@ -221,7 +221,7 @@ grpcurl -plaintext -d '{
 
 ## Business Rules
 
-1. **Price Validation**: Price must be greater than 0
+1. **Price Validation**: `price_cents` must be greater than 0 and at most 1e12 (integer cents, no floats)
 2. **Stock Validation**: Stock must be >= 0
 3. **SKU Uniqueness**: Each product must have a unique SKU
 4. **SKU Immutability**: SKU cannot be changed after product creation

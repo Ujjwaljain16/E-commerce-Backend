@@ -107,7 +107,7 @@ func TestGatewayCheckout(t *testing.T) {
 	})
 
 	productInput := map[string]interface{}{
-		"name": "Gateway Grinder", "description": "Conical burr grinder", "price": 49.5,
+		"name": "Gateway Grinder", "description": "Conical burr grinder", "priceCents": 4950,
 		"sku": fmt.Sprintf("GW-%d", suffix), "stock": 10, "category": "kitchen",
 	}
 	const createProduct = `mutation($in: CreateProductInput!) { createProduct(input: $in) { id stock } }`
@@ -125,17 +125,17 @@ func TestGatewayCheckout(t *testing.T) {
 	field(t, gql(t, admin.AccessToken, createProduct, map[string]interface{}{"in": productInput}), "createProduct", &product)
 
 	var order struct {
-		ID          string  `json:"id"`
-		Status      string  `json:"status"`
-		TotalAmount float64 `json:"totalAmount"`
-		UserID      string  `json:"userId"`
+		ID               string `json:"id"`
+		Status           string `json:"status"`
+		TotalAmountCents int64  `json:"totalAmountCents"`
+		UserID           string `json:"userId"`
 	}
-	field(t, gql(t, alice.AccessToken, `mutation($in: CreateOrderInput!) { createOrder(input: $in) { id status totalAmount userId } }`,
+	field(t, gql(t, alice.AccessToken, `mutation($in: CreateOrderInput!) { createOrder(input: $in) { id status totalAmountCents userId } }`,
 		map[string]interface{}{"in": map[string]interface{}{
 			"items":           []map[string]interface{}{{"productId": product.ID, "quantity": 2}},
 			"shippingAddress": "221B Baker Street", "billingAddress": "221B Baker Street", "paymentMethod": "card",
 		}}), "createOrder", &order)
-	if order.TotalAmount != 99 || order.UserID != alice.User.ID {
+	if order.TotalAmountCents != 9900 || order.UserID != alice.User.ID {
 		t.Fatalf("unexpected order %+v", order)
 	}
 
@@ -148,11 +148,11 @@ func TestGatewayCheckout(t *testing.T) {
 			return o.Status == "CONFIRMED", o.Status
 		})
 		var p struct {
-			Status string  `json:"status"`
-			Amount float64 `json:"amount"`
+			Status      string `json:"status"`
+			AmountCents int64  `json:"amountCents"`
 		}
-		field(t, gql(t, alice.AccessToken, `query($id: ID!) { paymentForOrder(orderId: $id) { status amount } }`, map[string]interface{}{"id": order.ID}), "paymentForOrder", &p)
-		if p.Status != "SUCCEEDED" || p.Amount != 99 {
+		field(t, gql(t, alice.AccessToken, `query($id: ID!) { paymentForOrder(orderId: $id) { status amountCents } }`, map[string]interface{}{"id": order.ID}), "paymentForOrder", &p)
+		if p.Status != "SUCCEEDED" || p.AmountCents != 9900 {
 			t.Fatalf("unexpected payment %+v", p)
 		}
 	})

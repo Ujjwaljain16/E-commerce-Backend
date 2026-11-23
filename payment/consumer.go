@@ -26,7 +26,7 @@ func (s *Service) HandleMessage(ctx context.Context, msg kafkago.Message) error 
 		_, err = s.Process(ctx, ProcessInput{
 			OrderID:        e.OrderID,
 			UserID:         e.UserID,
-			Amount:         e.TotalAmount,
+			AmountCents:    e.TotalAmountCents,
 			Currency:       e.Currency,
 			Method:         e.PaymentMethod,
 			IdempotencyKey: e.OrderID,

@@ -37,7 +37,7 @@ type Payment struct {
 	ID             string
 	OrderID        string
 	UserID         string
-	Amount         float64
+	AmountCents    int64
 	Currency       string
 	Status         Status
 	Method         string
@@ -70,7 +70,7 @@ type Repository interface {
 	Apply(ctx context.Context, t Transition) (*Payment, error)
 }
 
-const paymentColumns = `id, order_id, user_id, amount, currency, status, COALESCE(method, ''),
+const paymentColumns = `id, order_id, user_id, amount_cents, currency, status, COALESCE(method, ''),
 	COALESCE(provider_ref, ''), COALESCE(failure_reason, ''), idempotency_key, created_at, updated_at`
 
 type postgresRepository struct {
@@ -88,7 +88,7 @@ type rowScanner interface {
 
 func scanPayment(row rowScanner) (*Payment, error) {
 	var p Payment
-	err := row.Scan(&p.ID, &p.OrderID, &p.UserID, &p.Amount, &p.Currency, &p.Status, &p.Method,
+	err := row.Scan(&p.ID, &p.OrderID, &p.UserID, &p.AmountCents, &p.Currency, &p.Status, &p.Method,
 		&p.ProviderRef, &p.FailureReason, &p.IdempotencyKey, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -98,11 +98,11 @@ func scanPayment(row rowScanner) (*Payment, error) {
 
 func (r *postgresRepository) Insert(ctx context.Context, p *Payment) (*Payment, bool, error) {
 	row := r.db.QueryRowContext(ctx, `
-		INSERT INTO payments (id, order_id, user_id, amount, currency, status, method, failure_reason, idempotency_key)
+		INSERT INTO payments (id, order_id, user_id, amount_cents, currency, status, method, failure_reason, idempotency_key)
 		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''), $9)
 		ON CONFLICT DO NOTHING
 		RETURNING `+paymentColumns,
-		p.ID, p.OrderID, p.UserID, p.Amount, p.Currency, p.Status, p.Method, p.FailureReason, p.IdempotencyKey)
+		p.ID, p.OrderID, p.UserID, p.AmountCents, p.Currency, p.Status, p.Method, p.FailureReason, p.IdempotencyKey)
 	created, err := scanPayment(row)
 	if err == nil {
 		return created, true, nil

@@ -11,7 +11,7 @@ message Product {
     string id = 1;
     string name = 2;
     string description = 3;
-    double price = 4;
+    int64 price_cents = 4;
     string sku = 5;
     int32 stock = 6;
     repeated string images = 7;
@@ -24,7 +24,7 @@ message Product {
 message CreateProductRequest {
     string name = 1;
     string description = 2;
-    double price = 3;
+    int64 price_cents = 3;
     string sku = 4;
     int32 stock = 5;
     repeated string images = 6;
@@ -63,7 +63,7 @@ message UpdateProductRequest {
     string id = 1;
     string name = 2;
     string description = 3;
-    double price = 4;
+    int64 price_cents = 4;
     int32 stock = 5;
     repeated string images = 6;
     string category = 7;
@@ -105,7 +105,7 @@ message ReservedItem {
     string product_id = 1;
     string product_name = 2;
     int32 quantity = 3;
-    double unit_price = 4;
+    int64 unit_price_cents = 4;
 }
 
 message ReserveStockRequest {

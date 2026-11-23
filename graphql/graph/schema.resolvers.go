@@ -125,7 +125,7 @@ func (r *mutationResolver) CreateProduct(ctx context.Context, input CreateProduc
 	resp, err := r.CatalogSvc.CreateProduct(ctx, &catalogpb.CreateProductRequest{
 		Name:        input.Name,
 		Description: deref(input.Description),
-		Price:       input.Price,
+		PriceCents:  input.PriceCents,
 		Sku:         input.Sku,
 		Stock:       input.Stock,
 		Images:      input.Images,
@@ -152,7 +152,7 @@ func (r *mutationResolver) UpdateProduct(ctx context.Context, id string, input U
 		Id:          id,
 		Name:        p.GetName(),
 		Description: p.GetDescription(),
-		Price:       p.GetPrice(),
+		PriceCents:  p.GetPriceCents(),
 		Stock:       p.GetStock(),
 		Images:      p.GetImages(),
 		Category:    p.GetCategory(),
@@ -163,8 +163,8 @@ func (r *mutationResolver) UpdateProduct(ctx context.Context, id string, input U
 	if input.Description != nil {
 		req.Description = *input.Description
 	}
-	if input.Price != nil {
-		req.Price = *input.Price
+	if input.PriceCents != nil {
+		req.PriceCents = *input.PriceCents
 	}
 	if input.Stock != nil {
 		req.Stock = *input.Stock

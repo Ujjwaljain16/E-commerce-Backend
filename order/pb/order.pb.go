@@ -95,8 +95,8 @@ type OrderItem struct {
 	ProductId     string                 `protobuf:"bytes,3,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
 	ProductName   string                 `protobuf:"bytes,4,opt,name=product_name,json=productName,proto3" json:"product_name,omitempty"`
 	Quantity      int32                  `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	Price         float64                `protobuf:"fixed64,6,opt,name=price,proto3" json:"price,omitempty"`
-	Subtotal      float64                `protobuf:"fixed64,7,opt,name=subtotal,proto3" json:"subtotal,omitempty"`
+	PriceCents    int64                  `protobuf:"varint,6,opt,name=price_cents,json=priceCents,proto3" json:"price_cents,omitempty"`
+	SubtotalCents int64                  `protobuf:"varint,7,opt,name=subtotal_cents,json=subtotalCents,proto3" json:"subtotal_cents,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -166,35 +166,35 @@ func (x *OrderItem) GetQuantity() int32 {
 	return 0
 }
 
-func (x *OrderItem) GetPrice() float64 {
+func (x *OrderItem) GetPriceCents() int64 {
 	if x != nil {
-		return x.Price
+		return x.PriceCents
 	}
 	return 0
 }
 
-func (x *OrderItem) GetSubtotal() float64 {
+func (x *OrderItem) GetSubtotalCents() int64 {
 	if x != nil {
-		return x.Subtotal
+		return x.SubtotalCents
 	}
 	return 0
 }
 
 // Order represents a customer order
 type Order struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	UserId          string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Status          OrderStatus            `protobuf:"varint,3,opt,name=status,proto3,enum=order.OrderStatus" json:"status,omitempty"`
-	Items           []*OrderItem           `protobuf:"bytes,4,rep,name=items,proto3" json:"items,omitempty"`
-	TotalAmount     float64                `protobuf:"fixed64,5,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"`
-	ShippingAddress string                 `protobuf:"bytes,6,opt,name=shipping_address,json=shippingAddress,proto3" json:"shipping_address,omitempty"`
-	BillingAddress  string                 `protobuf:"bytes,7,opt,name=billing_address,json=billingAddress,proto3" json:"billing_address,omitempty"`
-	PaymentMethod   string                 `protobuf:"bytes,8,opt,name=payment_method,json=paymentMethod,proto3" json:"payment_method,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId           string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Status           OrderStatus            `protobuf:"varint,3,opt,name=status,proto3,enum=order.OrderStatus" json:"status,omitempty"`
+	Items            []*OrderItem           `protobuf:"bytes,4,rep,name=items,proto3" json:"items,omitempty"`
+	TotalAmountCents int64                  `protobuf:"varint,5,opt,name=total_amount_cents,json=totalAmountCents,proto3" json:"total_amount_cents,omitempty"`
+	ShippingAddress  string                 `protobuf:"bytes,6,opt,name=shipping_address,json=shippingAddress,proto3" json:"shipping_address,omitempty"`
+	BillingAddress   string                 `protobuf:"bytes,7,opt,name=billing_address,json=billingAddress,proto3" json:"billing_address,omitempty"`
+	PaymentMethod    string                 `protobuf:"bytes,8,opt,name=payment_method,json=paymentMethod,proto3" json:"payment_method,omitempty"`
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Order) Reset() {
@@ -255,9 +255,9 @@ func (x *Order) GetItems() []*OrderItem {
 	return nil
 }
 
-func (x *Order) GetTotalAmount() float64 {
+func (x *Order) GetTotalAmountCents() int64 {
 	if x != nil {
-		return x.TotalAmount
+		return x.TotalAmountCents
 	}
 	return 0
 }
@@ -379,7 +379,7 @@ type OrderItemInput struct {
 	ProductId     string                 `protobuf:"bytes,1,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
 	ProductName   string                 `protobuf:"bytes,2,opt,name=product_name,json=productName,proto3" json:"product_name,omitempty"`
 	Quantity      int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	Price         float64                `protobuf:"fixed64,4,opt,name=price,proto3" json:"price,omitempty"`
+	PriceCents    int64                  `protobuf:"varint,4,opt,name=price_cents,json=priceCents,proto3" json:"price_cents,omitempty"` // ignored: the catalog price at reservation time is authoritative
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -435,9 +435,9 @@ func (x *OrderItemInput) GetQuantity() int32 {
 	return 0
 }
 
-func (x *OrderItemInput) GetPrice() float64 {
+func (x *OrderItemInput) GetPriceCents() int64 {
 	if x != nil {
-		return x.Price
+		return x.PriceCents
 	}
 	return 0
 }
@@ -1047,22 +1047,23 @@ var File_order_order_proto protoreflect.FileDescriptor
 
 const file_order_order_proto_rawDesc = "" +
 	"\n" +
-	"\x11order/order.proto\x12\x05order\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc6\x01\n" +
+	"\x11order/order.proto\x12\x05order\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdc\x01\n" +
 	"\tOrderItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x03 \x01(\tR\tproductId\x12!\n" +
 	"\fproduct_name\x18\x04 \x01(\tR\vproductName\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x05R\bquantity\x12\x14\n" +
-	"\x05price\x18\x06 \x01(\x01R\x05price\x12\x1a\n" +
-	"\bsubtotal\x18\a \x01(\x01R\bsubtotal\"\x98\x03\n" +
+	"\bquantity\x18\x05 \x01(\x05R\bquantity\x12\x1f\n" +
+	"\vprice_cents\x18\x06 \x01(\x03R\n" +
+	"priceCents\x12%\n" +
+	"\x0esubtotal_cents\x18\a \x01(\x03R\rsubtotalCents\"\xa3\x03\n" +
 	"\x05Order\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12*\n" +
 	"\x06status\x18\x03 \x01(\x0e2\x12.order.OrderStatusR\x06status\x12&\n" +
-	"\x05items\x18\x04 \x03(\v2\x10.order.OrderItemR\x05items\x12!\n" +
-	"\ftotal_amount\x18\x05 \x01(\x01R\vtotalAmount\x12)\n" +
+	"\x05items\x18\x04 \x03(\v2\x10.order.OrderItemR\x05items\x12,\n" +
+	"\x12total_amount_cents\x18\x05 \x01(\x03R\x10totalAmountCents\x12)\n" +
 	"\x10shipping_address\x18\x06 \x01(\tR\x0fshippingAddress\x12'\n" +
 	"\x0fbilling_address\x18\a \x01(\tR\x0ebillingAddress\x12%\n" +
 	"\x0epayment_method\x18\b \x01(\tR\rpaymentMethod\x129\n" +
@@ -1076,13 +1077,14 @@ const file_order_order_proto_rawDesc = "" +
 	"\x05items\x18\x02 \x03(\v2\x15.order.OrderItemInputR\x05items\x12)\n" +
 	"\x10shipping_address\x18\x03 \x01(\tR\x0fshippingAddress\x12'\n" +
 	"\x0fbilling_address\x18\x04 \x01(\tR\x0ebillingAddress\x12%\n" +
-	"\x0epayment_method\x18\x05 \x01(\tR\rpaymentMethod\"\x84\x01\n" +
+	"\x0epayment_method\x18\x05 \x01(\tR\rpaymentMethod\"\x8f\x01\n" +
 	"\x0eOrderItemInput\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12!\n" +
 	"\fproduct_name\x18\x02 \x01(\tR\vproductName\x12\x1a\n" +
-	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12\x14\n" +
-	"\x05price\x18\x04 \x01(\x01R\x05price\"9\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12\x1f\n" +
+	"\vprice_cents\x18\x04 \x01(\x03R\n" +
+	"priceCents\"9\n" +
 	"\x13CreateOrderResponse\x12\"\n" +
 	"\x05order\x18\x01 \x01(\v2\f.order.OrderR\x05order\"!\n" +
 	"\x0fGetOrderRequest\x12\x0e\n" +

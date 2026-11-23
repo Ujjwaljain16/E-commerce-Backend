@@ -8,7 +8,7 @@ Charges orders and keeps their payment history. Payments are normally driven by 
 - Transactional outbox: status changes and their `payment.*` events are committed together, then relayed to Kafka
 - Refunds for succeeded payments, triggered by `RefundPayment` or `order.cancelled`
 - An order cancelled before it was charged gets a `CANCELLED` payment, so a late `order.created` is ignored
-- Pluggable `Processor`; ships with `MockProcessor` (declines method `card_declined` and amounts above 10000)
+- Pluggable `Processor`; ships with `MockProcessor` (declines method `card_declined` and amounts above 1,000,000 cents, i.e. $10,000)
 - Schema migrations applied at startup
 - gRPC health + reflection, Prometheus metrics, `/healthz`, panic recovery, graceful shutdown
 

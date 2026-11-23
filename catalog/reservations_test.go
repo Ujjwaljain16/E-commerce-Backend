@@ -60,8 +60,8 @@ func TestCommitReservation_ExpiredIsRestoredWhenStockAllows(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT status FROM stock_reservations`).
 		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("EXPIRED"))
-	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price FROM stock_reservation_items`).
-		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price"}).AddRow(productA, "A", 2, 5.0))
+	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price_cents FROM stock_reservation_items`).
+		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price_cents"}).AddRow(productA, "A", 2, 500))
 	mock.ExpectExec(`UPDATE products SET stock = stock - \$2 WHERE id = \$1 AND stock >= \$2`).
 		WithArgs(productA, int32(2)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE stock_reservations SET status = 'COMMITTED'`).WillReturnResult(sqlmock.NewResult(0, 1))
@@ -81,8 +81,8 @@ func TestCommitReservation_ExpiredAndSoldOutIsLost(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT status FROM stock_reservations`).
 		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("EXPIRED"))
-	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price FROM stock_reservation_items`).
-		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price"}).AddRow(productA, "A", 2, 5.0))
+	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price_cents FROM stock_reservation_items`).
+		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price_cents"}).AddRow(productA, "A", 2, 500))
 	mock.ExpectExec(`UPDATE products SET stock = stock - \$2`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
@@ -100,8 +100,8 @@ func TestExpireReservation_OnlyTouchesReservedRows(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`UPDATE stock_reservations SET status = \$2`).
 		WithArgs(testOrderID, "EXPIRED", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price FROM stock_reservation_items`).
-		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price"}).AddRow(productA, "A", 3, 5.0))
+	mock.ExpectQuery(`SELECT product_id, product_name, quantity, unit_price_cents FROM stock_reservation_items`).
+		WillReturnRows(sqlmock.NewRows([]string{"product_id", "product_name", "quantity", "unit_price_cents"}).AddRow(productA, "A", 3, 500))
 	mock.ExpectExec(`UPDATE products SET stock = stock \+ \$2`).WithArgs(productA, int32(3)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 

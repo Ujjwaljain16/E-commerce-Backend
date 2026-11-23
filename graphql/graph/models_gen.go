@@ -24,13 +24,14 @@ type CreateOrderInput struct {
 }
 
 type CreateProductInput struct {
-	Name        string   `json:"name"`
-	Description *string  `json:"description,omitempty"`
-	Price       float64  `json:"price"`
-	Sku         string   `json:"sku"`
-	Stock       int32    `json:"stock"`
-	Images      []string `json:"images,omitempty"`
-	Category    *string  `json:"category,omitempty"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	// Must be greater than zero.
+	PriceCents int64    `json:"priceCents"`
+	Sku        string   `json:"sku"`
+	Stock      int32    `json:"stock"`
+	Images     []string `json:"images,omitempty"`
+	Category   *string  `json:"category,omitempty"`
 }
 
 type Mutation struct {
@@ -55,25 +56,25 @@ type NotificationPage struct {
 }
 
 type Order struct {
-	ID              string       `json:"id"`
-	UserID          string       `json:"userId"`
-	Status          OrderStatus  `json:"status"`
-	Items           []*OrderItem `json:"items"`
-	TotalAmount     float64      `json:"totalAmount"`
-	ShippingAddress string       `json:"shippingAddress"`
-	BillingAddress  string       `json:"billingAddress"`
-	PaymentMethod   string       `json:"paymentMethod"`
-	CreatedAt       *time.Time   `json:"createdAt,omitempty"`
-	UpdatedAt       *time.Time   `json:"updatedAt,omitempty"`
+	ID               string       `json:"id"`
+	UserID           string       `json:"userId"`
+	Status           OrderStatus  `json:"status"`
+	Items            []*OrderItem `json:"items"`
+	TotalAmountCents int64        `json:"totalAmountCents"`
+	ShippingAddress  string       `json:"shippingAddress"`
+	BillingAddress   string       `json:"billingAddress"`
+	PaymentMethod    string       `json:"paymentMethod"`
+	CreatedAt        *time.Time   `json:"createdAt,omitempty"`
+	UpdatedAt        *time.Time   `json:"updatedAt,omitempty"`
 }
 
 type OrderItem struct {
-	ID          string  `json:"id"`
-	ProductID   string  `json:"productId"`
-	ProductName string  `json:"productName"`
-	Quantity    int32   `json:"quantity"`
-	Price       float64 `json:"price"`
-	Subtotal    float64 `json:"subtotal"`
+	ID            string `json:"id"`
+	ProductID     string `json:"productId"`
+	ProductName   string `json:"productName"`
+	Quantity      int32  `json:"quantity"`
+	PriceCents    int64  `json:"priceCents"`
+	SubtotalCents int64  `json:"subtotalCents"`
 }
 
 type OrderItemInput struct {
@@ -92,7 +93,7 @@ type Payment struct {
 	ID            string        `json:"id"`
 	OrderID       string        `json:"orderId"`
 	UserID        string        `json:"userId"`
-	Amount        float64       `json:"amount"`
+	AmountCents   int64         `json:"amountCents"`
 	Currency      string        `json:"currency"`
 	Status        PaymentStatus `json:"status"`
 	Method        string        `json:"method"`
@@ -113,7 +114,7 @@ type Product struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
-	Price       float64    `json:"price"`
+	PriceCents  int64      `json:"priceCents"`
 	Sku         string     `json:"sku"`
 	Stock       int32      `json:"stock"`
 	Images      []string   `json:"images"`
@@ -143,7 +144,7 @@ type RegisterInput struct {
 type UpdateProductInput struct {
 	Name        *string  `json:"name,omitempty"`
 	Description *string  `json:"description,omitempty"`
-	Price       *float64 `json:"price,omitempty"`
+	PriceCents  *int64   `json:"priceCents,omitempty"`
 	Stock       *int32   `json:"stock,omitempty"`
 	Images      []string `json:"images,omitempty"`
 	Category    *string  `json:"category,omitempty"`

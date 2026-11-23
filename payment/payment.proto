@@ -19,7 +19,7 @@ message Payment {
     string id = 1;
     string order_id = 2;
     string user_id = 3;
-    double amount = 4;
+    int64 amount_cents = 4;
     string currency = 5;
     PaymentStatus status = 6;
     string method = 7;
@@ -33,7 +33,7 @@ message Payment {
 message ProcessPaymentRequest {
     string order_id = 1;
     string user_id = 2;
-    double amount = 3;
+    int64 amount_cents = 3;
     string currency = 4;
     string method = 5;
     string idempotency_key = 6; // retries with the same key return the original payment

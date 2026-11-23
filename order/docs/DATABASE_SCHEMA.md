@@ -14,7 +14,7 @@ Stores the main order information.
 | `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique identifier for the order |
 | `user_id` | UUID | NOT NULL | ID of the user who placed the order |
 | `status` | INTEGER | NOT NULL, DEFAULT 1 | Order status (see Order Status Codes) |
-| `total_amount` | DECIMAL(10,2) | NOT NULL, CHECK (>= 0) | Total cost of the order |
+| `total_amount_cents` | BIGINT | NOT NULL, CHECK (>= 0) | Total cost of the order in cents |
 | `shipping_address` | TEXT | NOT NULL | Shipping address |
 | `billing_address` | TEXT | NOT NULL | Billing address |
 | `payment_method` | VARCHAR(50) | NOT NULL | Payment method used |
@@ -32,8 +32,8 @@ Stores individual items within an order.
 | `product_id` | UUID | NOT NULL | ID of the product purchased |
 | `product_name` | VARCHAR(255) | NOT NULL | Name of the product at time of purchase |
 | `quantity` | INTEGER | NOT NULL, CHECK (> 0) | Quantity purchased |
-| `price` | DECIMAL(10,2) | NOT NULL, CHECK (>= 0) | Price per unit at time of purchase |
-| `subtotal` | DECIMAL(10,2) | NOT NULL, CHECK (>= 0) | Total price (quantity * price) |
+| `price_cents` | BIGINT | NOT NULL, CHECK (>= 0) | Price per unit in cents at time of purchase |
+| `subtotal_cents` | BIGINT | NOT NULL, CHECK (>= 0) | quantity * price_cents |
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Timestamp when item was created |
 
 ## Indexes
@@ -76,13 +76,13 @@ erDiagram
         UUID id PK
         UUID user_id
         INTEGER status
-        DECIMAL total_amount
+        BIGINT total_amount_cents
     }
     order_items {
         UUID id PK
         UUID order_id FK
         UUID product_id
         INTEGER quantity
-        DECIMAL price
+        BIGINT price_cents
     }
 ```

@@ -3,7 +3,6 @@ package order
 import (
 	"context"
 	"errors"
-	"math"
 
 	catalogpb "github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/order/pb"
@@ -89,7 +88,7 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 			ProductID:   it.ProductId,
 			ProductName: it.ProductName,
 			Quantity:    int(it.Quantity),
-			Price:       it.UnitPrice,
+			PriceCents:  it.UnitPriceCents,
 		})
 	}
 
@@ -107,10 +106,11 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 		if _, rerr := s.inventory.ReleaseStock(context.WithoutCancel(ctx), &catalogpb.ReleaseStockRequest{OrderId: orderID}); rerr != nil {
 			s.log.Error(ctx, "Failed to release stock after order failure", map[string]interface{}{"error": rerr.Error(), "order_id": orderID})
 		}
+		if errors.Is(err, ErrTotalTooLarge) {
+			return nil, status.Error(codes.InvalidArgument, "order total is too large")
+		}
 		return nil, status.Error(codes.Internal, "failed to create order")
 	}
-	created.TotalAmount = math.Round(created.TotalAmount*100) / 100
-
 	s.log.Info(ctx, "Order created successfully", map[string]interface{}{"order_id": created.ID, "user_id": created.UserID})
 
 	return &pb.CreateOrderResponse{
@@ -300,26 +300,26 @@ func toProtoOrder(o *Order) *pb.Order {
 	items := make([]*pb.OrderItem, len(o.Items))
 	for i, item := range o.Items {
 		items[i] = &pb.OrderItem{
-			Id:          item.ID,
-			OrderId:     item.OrderID,
-			ProductId:   item.ProductID,
-			ProductName: item.ProductName,
-			Quantity:    int32(item.Quantity),
-			Price:       item.Price,
-			Subtotal:    item.Subtotal,
+			Id:            item.ID,
+			OrderId:       item.OrderID,
+			ProductId:     item.ProductID,
+			ProductName:   item.ProductName,
+			Quantity:      int32(item.Quantity),
+			PriceCents:    item.PriceCents,
+			SubtotalCents: item.SubtotalCents,
 		}
 	}
 
 	return &pb.Order{
-		Id:              o.ID,
-		UserId:          o.UserID,
-		Status:          pb.OrderStatus(o.Status),
-		Items:           items,
-		TotalAmount:     o.TotalAmount,
-		ShippingAddress: o.ShippingAddress,
-		BillingAddress:  o.BillingAddress,
-		PaymentMethod:   o.PaymentMethod,
-		CreatedAt:       timestamppb.New(o.CreatedAt),
-		UpdatedAt:       timestamppb.New(o.UpdatedAt),
+		Id:               o.ID,
+		UserId:           o.UserID,
+		Status:           pb.OrderStatus(o.Status),
+		Items:            items,
+		TotalAmountCents: o.TotalAmountCents,
+		ShippingAddress:  o.ShippingAddress,
+		BillingAddress:   o.BillingAddress,
+		PaymentMethod:    o.PaymentMethod,
+		CreatedAt:        timestamppb.New(o.CreatedAt),
+		UpdatedAt:        timestamppb.New(o.UpdatedAt),
 	}
 }

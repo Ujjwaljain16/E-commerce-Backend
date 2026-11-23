@@ -28,10 +28,10 @@ type StockItem struct {
 
 // ReservedItem is a reserved line item with the product's name and price at reservation time.
 type ReservedItem struct {
-	ProductID   string
-	ProductName string
-	Quantity    int32
-	UnitPrice   float64
+	ProductID      string
+	ProductName    string
+	Quantity       int32
+	UnitPriceCents int64
 }
 
 // StockError carries the product that caused a reservation to fail.
@@ -73,8 +73,8 @@ func (r *postgresRepository) ReserveStock(ctx context.Context, orderID string, i
 	for _, it := range sorted {
 		item := ReservedItem{ProductID: it.ProductID, Quantity: it.Quantity}
 		err := tx.QueryRowContext(ctx,
-			`UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING name, price`,
-			it.ProductID, it.Quantity).Scan(&item.ProductName, &item.UnitPrice)
+			`UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING name, price_cents`,
+			it.ProductID, it.Quantity).Scan(&item.ProductName, &item.UnitPriceCents)
 		if errors.Is(err, sql.ErrNoRows) {
 			var exists bool
 			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM products WHERE id = $1)`, it.ProductID).Scan(&exists); err != nil {
@@ -89,8 +89,8 @@ func (r *postgresRepository) ReserveStock(ctx context.Context, orderID string, i
 			return nil, fmt.Errorf("reserve %s: %w", it.ProductID, err)
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO stock_reservation_items (order_id, product_id, product_name, quantity, unit_price) VALUES ($1, $2, $3, $4, $5)`,
-			orderID, item.ProductID, item.ProductName, item.Quantity, item.UnitPrice); err != nil {
+			`INSERT INTO stock_reservation_items (order_id, product_id, product_name, quantity, unit_price_cents) VALUES ($1, $2, $3, $4, $5)`,
+			orderID, item.ProductID, item.ProductName, item.Quantity, item.UnitPriceCents); err != nil {
 			return nil, fmt.Errorf("insert reservation item: %w", err)
 		}
 		reserved = append(reserved, item)
@@ -110,7 +110,7 @@ func (r *postgresRepository) ReleaseStock(ctx context.Context, orderID string) (
 
 func reservationItems(ctx context.Context, tx *sql.Tx, orderID string) ([]ReservedItem, error) {
 	rows, err := tx.QueryContext(ctx,
-		`SELECT product_id, product_name, quantity, unit_price FROM stock_reservation_items WHERE order_id = $1 ORDER BY product_id`, orderID)
+		`SELECT product_id, product_name, quantity, unit_price_cents FROM stock_reservation_items WHERE order_id = $1 ORDER BY product_id`, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("load reservation items: %w", err)
 	}
@@ -118,7 +118,7 @@ func reservationItems(ctx context.Context, tx *sql.Tx, orderID string) ([]Reserv
 	var items []ReservedItem
 	for rows.Next() {
 		var it ReservedItem
-		if err := rows.Scan(&it.ProductID, &it.ProductName, &it.Quantity, &it.UnitPrice); err != nil {
+		if err := rows.Scan(&it.ProductID, &it.ProductName, &it.Quantity, &it.UnitPriceCents); err != nil {
 			return nil, err
 		}
 		items = append(items, it)
@@ -171,7 +171,7 @@ func (s *Service) ReserveStock(ctx context.Context, req *pb.ReserveStockRequest)
 	resp := &pb.ReserveStockResponse{Items: make([]*pb.ReservedItem, len(reserved))}
 	for i, it := range reserved {
 		resp.Items[i] = &pb.ReservedItem{
-			ProductId: it.ProductID, ProductName: it.ProductName, Quantity: it.Quantity, UnitPrice: it.UnitPrice,
+			ProductId: it.ProductID, ProductName: it.ProductName, Quantity: it.Quantity, UnitPriceCents: it.UnitPriceCents,
 		}
 	}
 	s.log.Info(ctx, "Stock reserved", map[string]interface{}{"order_id": req.OrderId, "items": len(reserved)})

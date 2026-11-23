@@ -23,7 +23,7 @@ func message(t *testing.T, topic string, v interface{}) kafkago.Message {
 func orderCreated() events.OrderCreated {
 	return events.OrderCreated{
 		Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID,
-		TotalAmount: 120.5, Currency: "USD", PaymentMethod: "card",
+		TotalAmountCents: 12050, Currency: "USD", PaymentMethod: "card",
 	}
 }
 
@@ -37,7 +37,7 @@ func TestHandleOrderCreatedChargesOnce(t *testing.T) {
 	p, err := repo.GetByOrderID(context.Background(), testOrderID)
 	require.NoError(t, err)
 	assert.Equal(t, StatusSucceeded, p.Status)
-	assert.Equal(t, 120.5, p.Amount)
+	assert.Equal(t, int64(12050), p.AmountCents)
 	assert.Equal(t, "card", p.Method)
 	assert.Equal(t, 1, proc.charges)
 }
@@ -59,7 +59,7 @@ func TestHandleOrderCancelledThenLateCreated(t *testing.T) {
 
 func TestHandleMessageSkipsPoisonMessages(t *testing.T) {
 	bad := orderCreated()
-	bad.TotalAmount = 0
+	bad.TotalAmountCents = 0
 	noUser := events.OrderCancelled{OrderID: testOrderID}
 
 	tests := []struct {

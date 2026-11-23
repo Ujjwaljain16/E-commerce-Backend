@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ func TestCreateOrder_Success(t *testing.T) {
 	req := &pb.CreateOrderRequest{
 		UserId: "3f2b6f0e-8d0c-4b7a-9b0e-6c1f2a3d4e5f",
 		Items: []*pb.OrderItemInput{
-			{ProductId: "prod-1", ProductName: "Product 1", Quantity: 1, Price: 10.0},
+			{ProductId: "prod-1", ProductName: "Product 1", Quantity: 1, PriceCents: 1000},
 		},
 		ShippingAddress: "123 Main St",
 		BillingAddress:  "123 Main St",
@@ -131,7 +132,7 @@ func TestCreateOrder_MissingUserID(t *testing.T) {
 	req := &pb.CreateOrderRequest{
 		UserId: "",
 		Items: []*pb.OrderItemInput{
-			{ProductId: "prod-1", Quantity: 1, Price: 10.0},
+			{ProductId: "prod-1", Quantity: 1, PriceCents: 1000},
 		},
 	}
 
@@ -155,7 +156,7 @@ func TestGetOrder_Success(t *testing.T) {
 				UserID: "user-123",
 				Status: OrderStatusPending,
 				Items: []OrderItem{
-					{ID: "item-1", ProductID: "prod-1", Quantity: 1, Price: 10.0},
+					{ID: "item-1", ProductID: "prod-1", Quantity: 1, PriceCents: 1000},
 				},
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
@@ -283,5 +284,27 @@ func TestCancelOrder_Success(t *testing.T) {
 
 	if !resp.Success {
 		t.Error("Expected success to be true")
+	}
+}
+
+func TestPriceOrder_IntegerCents(t *testing.T) {
+	o := &Order{Items: []OrderItem{{Quantity: 3, PriceCents: 1999}, {Quantity: 1, PriceCents: 1}}}
+	if err := priceOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Items[0].SubtotalCents != 5997 || o.Items[1].SubtotalCents != 1 || o.TotalAmountCents != 5998 {
+		t.Fatalf("unexpected totals: %+v total=%d", o.Items, o.TotalAmountCents)
+	}
+}
+
+func TestPriceOrder_RejectsOverflow(t *testing.T) {
+	cases := [][]OrderItem{
+		{{Quantity: 2, PriceCents: math.MaxInt64/2 + 1}},
+		{{Quantity: 1, PriceCents: math.MaxInt64}, {Quantity: 1, PriceCents: 1}},
+	}
+	for i, items := range cases {
+		if err := priceOrder(&Order{Items: items}); !errors.Is(err, ErrTotalTooLarge) {
+			t.Errorf("case %d: expected ErrTotalTooLarge, got %v", i, err)
+		}
 	}
 }

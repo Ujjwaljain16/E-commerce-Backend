@@ -74,7 +74,7 @@ func (f *fakeCatalog) CreateProduct(_ context.Context, in *catalogpb.CreateProdu
 
 func (f *fakeCatalog) UpdateProduct(_ context.Context, in *catalogpb.UpdateProductRequest, _ ...grpc.CallOption) (*catalogpb.UpdateProductResponse, error) {
 	f.updateReq = in
-	return &catalogpb.UpdateProductResponse{Product: &catalogpb.Product{Id: in.Id, Name: in.Name, Price: in.Price}}, nil
+	return &catalogpb.UpdateProductResponse{Product: &catalogpb.Product{Id: in.Id, Name: in.Name, PriceCents: in.PriceCents}}, nil
 }
 
 type fakeOrders struct {
@@ -218,7 +218,7 @@ func TestAuthRequired(t *testing.T) {
 
 func TestAdminOnlyOperations(t *testing.T) {
 	ops := map[string]string{
-		"createProduct":     `mutation { createProduct(input: {name: "Lamp", price: 10, sku: "L1", stock: 1}) { id } }`,
+		"createProduct":     `mutation { createProduct(input: {name: "Lamp", priceCents: 1000, sku: "L1", stock: 1}) { id } }`,
 		"deleteProduct":     `mutation { deleteProduct(id: "p1") }`,
 		"orders":            `{ orders(userId: "bob") { total } }`,
 		"updateOrderStatus": `mutation { updateOrderStatus(id: "o-bob", status: SHIPPED) { id } }`,
@@ -321,7 +321,7 @@ func TestCreateOrderUsesTokenUser(t *testing.T) {
 		t.Fatalf("items = %+v", req.Items)
 	}
 	item := req.Items[0]
-	if item.ProductId != "p1" || item.Quantity != 2 || item.Price != 0 || item.ProductName != "" {
+	if item.ProductId != "p1" || item.Quantity != 2 || item.PriceCents != 0 || item.ProductName != "" {
 		t.Fatalf("item = %+v, want only product id and quantity", item)
 	}
 }
@@ -398,14 +398,37 @@ func TestUpdateProfileKeepsOmittedFields(t *testing.T) {
 
 func TestUpdateProductMergesPatch(t *testing.T) {
 	env := newTestEnv()
-	env.catalog.product = &catalogpb.Product{Id: "p1", Name: "Lamp", Description: "warm", Price: 10, Stock: 3, Category: "home"}
-	resp := do(t, env.resolver, admin, `mutation { updateProduct(id: "p1", input: {price: 12.5}) { id price } }`, nil)
+	env.catalog.product = &catalogpb.Product{Id: "p1", Name: "Lamp", Description: "warm", PriceCents: 1000, Stock: 3, Category: "home"}
+	resp := do(t, env.resolver, admin, `mutation { updateProduct(id: "p1", input: {priceCents: 1250}) { id priceCents } }`, nil)
 	if len(resp.Errors) != 0 {
 		t.Fatalf("unexpected errors: %+v", resp.Errors)
 	}
 	got := env.catalog.updateReq
-	if got.Name != "Lamp" || got.Description != "warm" || got.Price != 12.5 || got.Stock != 3 || got.Category != "home" {
+	if got.Name != "Lamp" || got.Description != "warm" || got.PriceCents != 1250 || got.Stock != 3 || got.Category != "home" {
 		t.Fatalf("update request = %+v", got)
+	}
+}
+
+func TestMoneyIsInt64Cents(t *testing.T) {
+	env := newTestEnv()
+	env.catalog.product = &catalogpb.Product{Id: "p1", Name: "Lamp", PriceCents: 1000, Stock: 3}
+	// Larger than a 32-bit Int can hold.
+	resp := do(t, env.resolver, admin, `mutation { updateProduct(id: "p1", input: {priceCents: 5000000000}) { priceCents } }`, nil)
+	if len(resp.Errors) != 0 {
+		t.Fatalf("unexpected errors: %+v", resp.Errors)
+	}
+	if env.catalog.updateReq.PriceCents != 5_000_000_000 {
+		t.Fatalf("price_cents = %d", env.catalog.updateReq.PriceCents)
+	}
+	if !strings.Contains(string(resp.Data["updateProduct"]), `"priceCents":5000000000`) {
+		t.Fatalf("payload = %s", resp.Data["updateProduct"])
+	}
+
+	env = newTestEnv()
+	env.catalog.product = &catalogpb.Product{Id: "p1", Name: "Lamp", PriceCents: 1000, Stock: 3}
+	resp = do(t, env.resolver, admin, `mutation { updateProduct(id: "p1", input: {priceCents: 12.5}) { id } }`, nil)
+	if len(resp.Errors) == 0 || env.catalog.updateReq != nil {
+		t.Fatalf("fractional cents must be rejected, got errors %+v and request %+v", resp.Errors, env.catalog.updateReq)
 	}
 }
 
@@ -435,7 +458,7 @@ func TestIntrospectionDisabledByDefault(t *testing.T) {
 
 func TestComplexityLimit(t *testing.T) {
 	resp := doWith(t, newTestEnv().resolver, HandlerOptions{ComplexityLimit: 3}, nil,
-		`{ products { total page pageSize items { id name price } } }`, nil)
+		`{ products { total page pageSize items { id name priceCents } } }`, nil)
 	if resp.code() != "COMPLEXITY_LIMIT_EXCEEDED" {
 		t.Fatalf("code = %q, errors %+v", resp.code(), resp.Errors)
 	}
