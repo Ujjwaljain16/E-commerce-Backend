@@ -36,6 +36,19 @@ Stores individual items within an order.
 | `subtotal_cents` | BIGINT | NOT NULL, CHECK (>= 0) | quantity * price_cents |
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Timestamp when item was created |
 
+### 3. `order_outbox`
+
+Events waiting to be published to Kafka. Rows are written in the same transaction as the order change (transactional outbox), published in batches by the relay, and deleted 7 days after publishing.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | BIGSERIAL | PRIMARY KEY | Publishing order |
+| `topic` | TEXT | NOT NULL | `order.created`, `order.confirmed` or `order.cancelled` |
+| `message_key` | TEXT | NOT NULL | The order id, so an order's events share a partition |
+| `payload` | JSONB | NOT NULL | Event body (see `pkg/events`) |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the event was recorded |
+| `published_at` | TIMESTAMPTZ | | Set once Kafka acknowledged it |
+
 ## Indexes
 
 | Index Name | Table | Columns | Type | Usage |
@@ -45,6 +58,7 @@ Stores individual items within an order.
 | `idx_orders_created_at` | `orders` | `created_at DESC` | B-TREE | Sorting orders by date (newest first) |
 | `idx_order_items_order_id` | `order_items` | `order_id` | B-TREE | Retrieving items for a specific order |
 | `idx_order_items_product_id` | `order_items` | `product_id` | B-TREE | Analyzing sales by product |
+| `idx_order_outbox_pending` | `order_outbox` | `id` WHERE `published_at IS NULL` | B-TREE (partial) | Finding unpublished events |
 
 ## Order Status Codes
 
@@ -59,6 +73,28 @@ The `status` column in the `orders` table maps to the following values:
 | 5 | DELIVERED | Order has been delivered to customer |
 | 6 | CANCELLED | Order has been cancelled |
 | 7 | REFUNDED | Order has been refunded |
+
+Allowed transitions:
+
+| From | To | Triggered by |
+|------|----|--------------|
+| PENDING | CONFIRMED | `payment.succeeded` event |
+| PENDING | CANCELLED | `payment.failed` event, customer or admin cancel |
+| CONFIRMED | CANCELLED | Customer or admin cancel (payment is refunded) |
+| CONFIRMED → PROCESSING → SHIPPED → DELIVERED | next step | Admin `UpdateOrderStatus` |
+| any except CANCELLED | REFUNDED | `payment.refunded` event |
+
+Each transition is a guarded `UPDATE ... WHERE status = ...`; confirmations and cancellations write their event to `order_outbox` in the same transaction.
+
+## Migration History
+
+Migrations are embedded in the binary and applied at startup; applied versions are tracked in `order_schema_migrations`.
+
+| Migration | Description |
+|-----------|-------------|
+| `001_create_orders_table` | Orders and order items |
+| `002_create_order_outbox` | Transactional outbox |
+| `003_amounts_in_cents` | Amounts stored as integer cents |
 
 ## Triggers
 

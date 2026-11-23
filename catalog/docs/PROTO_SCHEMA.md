@@ -22,6 +22,8 @@ service CatalogService {
   rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
   rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse);
   rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse);
+  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
+  rpc ReleaseStock(ReleaseStockRequest) returns (ReleaseStockResponse);
 }
 ```
 
@@ -289,7 +291,7 @@ message DeleteProductResponse {}
 
 #### SearchProductsRequest
 
-Request to search products by name with pagination.
+Full-text search over product name and description with pagination.
 
 ```protobuf
 message SearchProductsRequest {
@@ -301,14 +303,13 @@ message SearchProductsRequest {
 
 | Field | Type | Tag | Required | Description |
 |-------|------|-----|----------|-------------|
-| `query` | string | 1 | Yes | Search term for product name (case-insensitive) |
+| `query` | string | 1 | Yes | Search text; supports web-search syntax (`"exact phrase"`, `-exclude`, `or`) |
 | `page` | int32 | 2 | No | Page number (default: 1) |
 | `page_size` | int32 | 3 | No | Items per page (default: 10) |
 
 **Notes**:
-- Search uses ILIKE for case-insensitive partial matching
-- Query wrapped with `%` for substring search
-- Results ordered by name ASC
+- Matches whole (stemmed) words in the name and description, not substrings
+- Name matches rank above description matches; ties are newest first
 
 **Error Codes**:
 - `InvalidArgument` - Empty query string
@@ -331,6 +332,50 @@ message SearchProductsResponse {
 
 ---
 
+### Stock Reservation (internal, called by the order service)
+
+```protobuf
+message StockItem {
+    string product_id = 1;
+    int32 quantity = 2;
+}
+
+message ReservedItem {
+    string product_id = 1;
+    string product_name = 2;
+    int32 quantity = 3;
+    int64 unit_price_cents = 4;
+}
+
+message ReserveStockRequest {
+    string order_id = 1;
+    repeated StockItem items = 2;
+}
+
+message ReserveStockResponse {
+    repeated ReservedItem items = 1;
+}
+
+message ReleaseStockRequest {
+    string order_id = 1;
+}
+
+message ReleaseStockResponse {
+    bool released = 1;
+}
+```
+
+`ReserveStock` decrements stock for all items in one transaction and returns each product's name and price. Those are what the order stores; client-supplied prices are ignored. Lines for the same product are merged. Calling it again for the same `order_id` returns the original reservation.
+
+`ReleaseStock` returns the stock of a reserved or committed order and reports `released: false` when there was nothing to release. The order service only calls it when saving an order fails. Normal cancellations release stock when catalog consumes `order.cancelled`.
+
+**Error Codes**:
+- `InvalidArgument` - order or product id not a UUID, no items, non-positive quantity
+- `NotFound` - a product does not exist
+- `FailedPrecondition` - not enough stock for a product
+
+---
+
 ## RPC Method Summary
 
 | Method | Request | Response | Description |
@@ -340,7 +385,9 @@ message SearchProductsResponse {
 | `ListProducts` | ListProductsRequest | ListProductsResponse | List products with filtering/pagination |
 | `UpdateProduct` | UpdateProductRequest | UpdateProductResponse | Update existing product |
 | `DeleteProduct` | DeleteProductRequest | DeleteProductResponse | Delete product by ID |
-| `SearchProducts` | SearchProductsRequest | SearchProductsResponse | Search products by name |
+| `SearchProducts` | SearchProductsRequest | SearchProductsResponse | Full-text search on name and description |
+| `ReserveStock` | ReserveStockRequest | ReserveStockResponse | Reserve and price an order's items (internal) |
+| `ReleaseStock` | ReleaseStockRequest | ReleaseStockResponse | Return an order's reserved stock (internal) |
 
 ## Error Handling
 

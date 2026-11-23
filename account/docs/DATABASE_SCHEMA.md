@@ -79,12 +79,35 @@ CREATE TRIGGER update_accounts_updated_at
 
 The `update_accounts_updated_at` trigger automatically sets `updated_at` to the current timestamp whenever a row is modified.
 
+### refresh_tokens
+
+One row per issued refresh token, so refresh tokens can be rotated (single use) and revoked.
+
+```sql
+CREATE TABLE refresh_tokens (
+    jti UUID PRIMARY KEY,               -- the token's "jti" claim
+    user_id VARCHAR(36) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,                -- set when the token is exchanged for a new pair
+    revoked_at TIMESTAMPTZ,             -- set by logout, password change, account deletion or reuse detection
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id) WHERE revoked_at IS NULL;
+CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens (expires_at);
+```
+
+- `RefreshToken` atomically sets `used_at` on an unused, unrevoked, unexpired row. If the row was already used, every token of that user is revoked (a copy of the token leaked).
+- Rows expired for more than a day are deleted hourly by the service.
+
 ## Migration History
+
+Migrations are embedded in the binary and applied at startup; applied versions are tracked in `account_schema_migrations`.
 
 | Migration | File | Description |
 |-----------|------|-------------|
 | 001 | `001_create_accounts_table.up.sql` | Initial table creation with core fields |
 | 002 | `002_add_role_column.up.sql` | Added `role` column for RBAC support |
+| 003 | `003_create_refresh_tokens.up.sql` | Refresh token tracking for rotation and revocation |
 
 ## Data Types and Formats
 

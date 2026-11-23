@@ -24,6 +24,7 @@ service AccountService {
   rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
   rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
 }
 ```
 
@@ -364,9 +365,11 @@ message RefreshTokenRequest {
 |-------|------|-----|----------|-------------|
 | `refresh_token` | string | 1 | Yes | JWT refresh token |
 
+Refresh tokens are single use. A successful call marks the presented token as used and returns a new pair. The account is re-read, so a deleted account or a role change takes effect here.
+
 **Error Codes**:
 - `InvalidArgument` - Missing refresh token
-- `Unauthenticated` - Invalid or expired refresh token
+- `Unauthenticated` - Invalid, expired, revoked or already used refresh token. Presenting an already used token also revokes every refresh token of that user.
 
 #### RefreshTokenResponse
 
@@ -384,39 +387,50 @@ message RefreshTokenResponse {
 | `access_token` | string | 1 | New JWT access token (15 min expiry) |
 | `refresh_token` | string | 2 | New JWT refresh token (7 day expiry) |
 
+#### LogoutRequest / LogoutResponse
+
+```protobuf
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+```
+
+Revokes the refresh token. An invalid or expired token still returns `success: true`, because it can't be used anyway. Access tokens are stateless and stay valid until they expire (15 minutes).
+
+`ChangePassword` and `DeleteAccount` also revoke all of the user's refresh tokens.
+
 ---
 
 ## JWT Token Structure
 
 While not defined in the proto file, the JWT tokens use the following claims:
 
-### Access Token Claims
+Both token types carry the same claims; `typ` tells them apart and each is rejected where the other is expected.
+
 ```json
 {
   "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
   "role": "USER",
+  "typ": "access",
+  "jti": "5b0f4c3e-0c1e-4d7a-9e55-2f3f8b0d6a11",
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
   "exp": 1705329000,
-  "iat": 1705328100
-}
-```
-
-### Refresh Token Claims
-```json
-{
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "type": "refresh",
-  "exp": 1705933900,
   "iat": 1705328100
 }
 ```
 
 | Claim | Description |
 |-------|-------------|
-| `user_id` | UUID of the authenticated user |
-| `email` | User's email (access token only) |
-| `role` | User's role for RBAC (access token only) |
-| `type` | Token type: "refresh" (refresh token only) |
+| `user_id` / `sub` | UUID of the authenticated user |
+| `email` | User's email |
+| `role` | `USER` or `ADMIN` |
+| `typ` | `access` or `refresh` |
+| `jti` | Unique token id; refresh tokens are tracked by it in `refresh_tokens` |
 | `exp` | Expiration time (Unix timestamp) |
 | `iat` | Issued at time (Unix timestamp) |
 
@@ -426,7 +440,7 @@ While not defined in the proto file, the JWT tokens use the following claims:
 
 **Signing**:
 - Algorithm: HS256 (HMAC-SHA256)
-- Secret: Configured via `JWT_SECRET` environment variable
+- Secret: `JWT_SECRET` environment variable, required, at least 32 characters
 
 ---
 
