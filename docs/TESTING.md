@@ -1,3 +1,16 @@
+# Testing
+
+## Automated tests
+
+| Command | What it runs | Needs |
+|---------|--------------|-------|
+| `make test` | Unit tests | nothing |
+| `make integration-test` | Repository tests against throwaway Postgres containers | Docker |
+| `make e2e` | Full checkout saga, gateway auth and sessions against the running stack | `docker compose up -d` |
+| `make load` | 30 s load test through the gateway | the stack with a raised rate limit (see README) |
+
+The rest of this page is the manual grpcurl walkthrough for the account service.
+
 # Account Service Manual Testing Guide
 
 ## Test Files Location
@@ -24,7 +37,7 @@ docker-compose up -d
 ## Wait for services to be ready
 ```bash
 docker-compose logs -f account-service
-# Wait until you see: "Account Service listening on port 50051"
+# Wait until you see: "account-service listening"
 ```
 
 ## Test 1: Register a new user
@@ -102,6 +115,9 @@ grpcurl -plaintext -d '{
 ```
 
 ## Test 7: Refresh Token
+
+Refresh tokens are single use: each call returns a new refresh token, and sending an old one again
+is treated as theft and signs out all of that user's sessions. Use the latest token each time.
 ```bash
 grpcurl -plaintext -d '{
   "refresh_token": "YOUR_REFRESH_TOKEN_HERE"

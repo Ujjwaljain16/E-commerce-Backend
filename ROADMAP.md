@@ -5,6 +5,11 @@
 **Timeline**: 4-6 weeks  
 **Approach**: Professional Git workflow with proper commits, branches, and PRs
 
+> **Status (Nov 2026):** every item below is done except a deployment (CD) workflow. The finished
+> design and its trade-offs are in [decisions.md](decisions.md); how to run, test and deploy is in the
+> [README](README.md). Payment and notification services were built as one branch, and the work went
+> beyond this plan (outbox, stock reservations, integer-cent money, refresh-token rotation, load tests).
+
 ---
 
 ## 🎯 Development Philosophy
@@ -129,17 +134,17 @@ feat(account): add structured request logging
 
 ---
 
-### 🔄 Issue #6: Account Service Enhancements
+### ✅ Issue #6: Account Service Enhancements
 **Branch**: `feature/6-account-enhancements`  
 **Estimated**: 4 hours
 
 **Tasks**:
-- [ ] Extract JWT to `pkg/auth` package
-- [ ] Add gRPC health check endpoint
-- [ ] Add Prometheus metrics instrumentation
-- [ ] Add role-based access control (USER/ADMIN roles)
-- [ ] Write automated integration tests
-- [ ] Add unit tests for service layer
+- [x] Extract JWT to `pkg/auth` package
+- [x] Add gRPC health check endpoint
+- [x] Add Prometheus metrics instrumentation
+- [x] Add role-based access control (USER/ADMIN roles)
+- [x] Write automated integration tests
+- [x] Add unit tests for service layer
 
 **Commits**:
 ```
@@ -181,12 +186,12 @@ Each following the same pattern:
 **Estimated**: 1 day
 
 **Tasks**:
-- [ ] Create `pkg/kafka` producer/consumer
-- [ ] Add Kafka to docker-compose
-- [ ] Implement event publishing in Order service
-- [ ] Implement event consumption in Payment service
-- [ ] Add event schema definitions
-- [ ] Test event flow end-to-end
+- [x] Create `pkg/kafka` producer/consumer
+- [x] Add Kafka to docker-compose
+- [x] Implement event publishing in Order service
+- [x] Implement event consumption in Payment service
+- [x] Add event schema definitions
+- [x] Test event flow end-to-end
 
 **Commits**:
 ```
@@ -205,11 +210,11 @@ test: add event flow integration tests
 **Estimated**: 1 day
 
 **Tasks**:
-- [ ] Create `pkg/cache` Redis client
-- [ ] Add Redis to docker-compose
-- [ ] Implement caching in Catalog service
-- [ ] Add cache invalidation
-- [ ] Test cache hit/miss scenarios
+- [x] Create `pkg/cache` Redis client
+- [x] Add Redis to docker-compose
+- [x] Implement caching in Catalog service
+- [x] Add cache invalidation
+- [x] Test cache hit/miss scenarios
 
 ---
 
@@ -220,12 +225,12 @@ test: add event flow integration tests
 **Estimated**: 2 days
 
 **Tasks**:
-- [ ] Set up gqlgen
-- [ ] Define GraphQL schema
-- [ ] Implement resolvers for all services
-- [ ] Add authentication middleware
-- [ ] Add rate limiting
-- [ ] Create Playground
+- [x] Set up gqlgen
+- [x] Define GraphQL schema
+- [x] Implement resolvers for all services
+- [x] Add authentication middleware
+- [x] Add rate limiting
+- [x] Create Playground
 
 ---
 
@@ -234,11 +239,11 @@ test: add event flow integration tests
 **Estimated**: 2 days
 
 **Tasks**:
-- [ ] Add Prometheus to docker-compose
-- [ ] Add Grafana with dashboards
-- [ ] Configure service metrics collection
-- [ ] Create custom dashboards
-- [ ] Add alerting rules
+- [x] Add Prometheus to docker-compose
+- [x] Add Grafana with dashboards
+- [x] Configure service metrics collection
+- [x] Create custom dashboards
+- [x] Add alerting rules
 
 ---
 
@@ -249,11 +254,11 @@ test: add event flow integration tests
 **Estimated**: 2 days
 
 **Tasks**:
-- [ ] Create K8s manifests for all services
-- [ ] Add ConfigMaps and Secrets
-- [ ] Configure Ingress
-- [ ] Add HorizontalPodAutoscaler
-- [ ] Test on local cluster (minikube)
+- [x] Create K8s manifests for all services
+- [x] Add Secrets (config is plain env vars in the manifests; no ConfigMaps needed)
+- [x] Configure Ingress
+- [x] Add HorizontalPodAutoscaler
+- [x] Test on local cluster (minikube)
 
 ---
 
@@ -262,11 +267,11 @@ test: add event flow integration tests
 **Estimated**: 2 days
 
 **Tasks**:
-- [ ] Enhance GitHub Actions
-- [ ] Add Docker build and push
-- [ ] Add integration tests in CI
-- [ ] Add security scanning
-- [ ] Add deployment workflow
+- [x] Enhance GitHub Actions
+- [x] Add Docker build and push
+- [x] Add integration tests in CI
+- [x] Add security scanning
+- [ ] Add deployment workflow (not done: CI builds and scans images; deploys are manual with `kubectl apply -k`)
 
 ---
 
