@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/kafka"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 )
 
@@ -112,6 +113,71 @@ func TestPrune_DeletesInBatchesUntilDone(t *testing.T) {
 	n, err := r.Prune(context.Background(), week)
 	if err != nil || n != 5012 {
 		t.Fatalf("prune = %d, %v", n, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type fakeBatchPublisher struct {
+	fakePublisher
+	batches [][]kafka.Message
+	err     error
+}
+
+func (f *fakeBatchPublisher) PublishBatch(_ context.Context, msgs []kafka.Message) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.batches = append(f.batches, msgs)
+	return nil
+}
+
+func TestFlush_BatchPublisherSendsOneBatchAndMarksAll(t *testing.T) {
+	pub := &fakeBatchPublisher{}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	r := NewRelay(db, "test_outbox", pub, logger.New("test"))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT id, topic, message_key, payload FROM test_outbox`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "topic", "message_key", "payload"}).
+			AddRow(1, "order.created", "a", []byte(`{}`)).
+			AddRow(2, "order.created", "b", []byte(`{}`)))
+	mock.ExpectExec(`UPDATE test_outbox SET published_at = NOW\(\) WHERE id = ANY\(\$1\)`).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+
+	n, err := r.flush(context.Background())
+	if err != nil || n != 2 {
+		t.Fatalf("flush = %d, %v", n, err)
+	}
+	if len(pub.batches) != 1 || len(pub.batches[0]) != 2 || pub.batches[0][0].Key != "a" {
+		t.Fatalf("expected one ordered batch of 2, got %+v", pub.batches)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFlush_FailedBatchMarksNothing(t *testing.T) {
+	pub := &fakeBatchPublisher{err: errors.New("broker down")}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	r := NewRelay(db, "test_outbox", pub, logger.New("test"))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT id, topic, message_key, payload FROM test_outbox`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "topic", "message_key", "payload"}).AddRow(1, "t", "a", []byte(`{}`)))
+	mock.ExpectRollback()
+
+	if n, err := r.flush(context.Background()); err != nil || n != 0 {
+		t.Fatalf("flush = %d, %v", n, err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

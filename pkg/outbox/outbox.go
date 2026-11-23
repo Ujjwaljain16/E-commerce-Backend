@@ -24,6 +24,7 @@ import (
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/kafka"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
+	"github.com/lib/pq"
 )
 
 // Execer is satisfied by *sql.Tx and *sql.DB.
@@ -58,7 +59,7 @@ type Relay struct {
 
 // NewRelay creates a relay for the given table.
 func NewRelay(db *sql.DB, table string, pub kafka.Publisher, log *logger.Logger) *Relay {
-	return &Relay{db: db, table: table, pub: pub, log: log, interval: 500 * time.Millisecond, batchSize: 100, retention: 7 * 24 * time.Hour}
+	return &Relay{db: db, table: table, pub: pub, log: log, interval: 200 * time.Millisecond, batchSize: 500, retention: 7 * 24 * time.Hour}
 }
 
 // Run publishes pending events until ctx is cancelled.
@@ -150,6 +151,32 @@ func (r *Relay) flush(ctx context.Context) (int, error) {
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, err
+	}
+
+	if len(batch) == 0 {
+		return 0, tx.Commit()
+	}
+
+	// One round trip for the whole batch: publishing message by message caps the relay at roughly
+	// one Kafka acknowledgement per event, far below what checkout produces under load.
+	if bp, ok := r.pub.(kafka.BatchPublisher); ok {
+		msgs := make([]kafka.Message, len(batch))
+		ids := make([]int64, len(batch))
+		for i, p := range batch {
+			msgs[i] = kafka.Message{Topic: p.topic, Key: p.key, Value: p.payload}
+			ids[i] = p.id
+		}
+		if err := bp.PublishBatch(ctx, msgs); err != nil {
+			r.log.Warn(ctx, "outbox batch publish failed", map[string]interface{}{"error": err.Error(), "events": len(batch)})
+			return 0, nil
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET published_at = NOW() WHERE id = ANY($1)`, r.table), pq.Array(ids)); err != nil {
+			return 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		return len(batch), nil
 	}
 
 	published := 0
