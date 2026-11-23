@@ -9,7 +9,6 @@ import (
 	"github.com/Ujjwaljain16/E-commerce-Backend/account/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // mockRepository implements Repository interface for testing
@@ -644,9 +643,4 @@ func testVerifyTokenEmpty(t *testing.T, service *Service) {
 	if !ok || st.Code() != codes.InvalidArgument {
 		t.Errorf("Expected InvalidArgument error, got %v", err)
 	}
-}
-
-// Helper function to create timestamppb from time.Time for testing
-func mustTimestamp(t time.Time) *timestamppb.Timestamp {
-	return timestamppb.New(t)
 }

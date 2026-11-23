@@ -3,11 +3,11 @@ package catalog
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
 	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/logger"
 	_ "github.com/lib/pq"
 	"github.com/testcontainers/testcontainers-go"
@@ -70,41 +70,9 @@ func setupIntegrationTest(t *testing.T) (*Service, func()) {
 	return service, cleanup
 }
 
-// runMigrations applies database schema
+// runMigrations applies the same embedded migrations the service runs at startup.
 func runMigrations(db *sql.DB) error {
-	// Create products table
-	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS products (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			name VARCHAR(255) NOT NULL,
-			description TEXT,
-			price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
-			sku VARCHAR(100) UNIQUE NOT NULL,
-			stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
-			images TEXT[],
-			category VARCHAR(100),
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-	if _, err := db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create products table: %w", err)
-	}
-
-	// Create indexes
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);",
-		"CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);",
-		"CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);",
-	}
-
-	for _, indexSQL := range indexes {
-		if _, err := db.Exec(indexSQL); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	return nil
+	return database.Migrate(context.Background(), db, Migrations, "migrations", "catalog_schema_migrations")
 }
 
 func TestIntegration_CreateProduct(t *testing.T) {

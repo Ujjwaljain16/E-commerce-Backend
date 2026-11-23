@@ -52,7 +52,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.Name != product.Name {
@@ -119,7 +119,7 @@ func TestGetByID(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.ID != productID {
@@ -178,7 +178,7 @@ func TestGetBySKU(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.SKU != sku {
@@ -300,7 +300,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	if result == nil {
-		t.Error("Expected product, got nil")
+		t.Fatal("Expected product, got nil")
 	}
 
 	if result.Name != product.Name {
