@@ -48,7 +48,9 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}
 	log.Info(ctx, "database ready", nil)
 
-	conn, err := grpc.NewClient(catalogAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(catalogAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Wait for catalog to come back during its restarts; CreateOrder's context bounds the wait.
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	if err != nil {
 		return fmt.Errorf("catalog client: %w", err)
 	}

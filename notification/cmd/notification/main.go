@@ -71,7 +71,8 @@ func run() error {
 		return fail("Failed to run migrations", err)
 	}
 
-	accountConn, err := grpc.NewClient(accountAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	accountConn, err := grpc.NewClient(accountAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	if err != nil {
 		return fail("Failed to create account service client", err)
 	}

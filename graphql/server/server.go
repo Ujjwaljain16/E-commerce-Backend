@@ -42,6 +42,9 @@ func DialBackends(cfg Config) (*Backends, error) {
 		conn, err := grpc.NewClient(addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(timeoutInterceptor(cfg.GRPCTimeout)),
+			// While a backend restarts, wait (up to the call timeout) for the connection instead of
+			// failing immediately, so rolling deploys don't surface as UNAVAILABLE errors.
+			grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 		)
 		if err != nil {
 			b.Close()

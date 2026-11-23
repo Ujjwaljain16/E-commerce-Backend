@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"time"
 
 	catalogpb "github.com/Ujjwaljain16/E-commerce-Backend/catalog/pb"
 	"github.com/Ujjwaljain16/E-commerce-Backend/order/pb"
@@ -102,8 +103,12 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 	})
 	if err != nil {
 		s.log.Error(ctx, "Failed to create order", map[string]interface{}{"error": err.Error(), "user_id": req.UserId})
-		// No order row exists, so no event will ever release this reservation; do it now.
-		if _, rerr := s.inventory.ReleaseStock(context.WithoutCancel(ctx), &catalogpb.ReleaseStockRequest{OrderId: orderID}); rerr != nil {
+		// No order row exists, so no event will release this reservation; try now. If this fails too,
+		// the catalog sweeper expires the reservation after RESERVATION_TTL.
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		_, rerr := s.inventory.ReleaseStock(releaseCtx, &catalogpb.ReleaseStockRequest{OrderId: orderID})
+		cancel()
+		if rerr != nil {
 			s.log.Error(ctx, "Failed to release stock after order failure", map[string]interface{}{"error": rerr.Error(), "order_id": orderID})
 		}
 		if errors.Is(err, ErrTotalTooLarge) {
