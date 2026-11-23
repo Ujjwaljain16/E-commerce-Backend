@@ -143,7 +143,23 @@ library vulnerabilities (net/http, crypto/tls, crypto/x509) whose fixes exist on
 vulnerable `golang.org/x/net` and `klauspost/compress` versions. CI runs govulncheck so this is caught
 again when the next release ships.
 
-## 13. Operations
+## 13. Throughput of the event pipeline
+
+The first load test showed checkout events piling up: orders were created at ~230/s but confirmed at ~85/s,
+with 6,000 events waiting in the outbox. Three fixes, each measured:
+
+- The outbox relay publishes up to 500 events in one Kafka write instead of waiting for an ack per event.
+  A failed batch is retried whole, which is safe because consumers are idempotent.
+- Consumers commit offsets in the background every second instead of one synchronous commit per message;
+  a crash replays at most about a second of messages.
+- Each service runs one consumer-group member per partition (3), so partitions are processed in parallel
+  while each order's events stay in order. More replicas scale the same way up to the partition count.
+
+After the fixes, 30 s of full load leaves a backlog that clears within about 12 s. Internal gRPC clients
+also wait for a restarting backend (bounded by the call timeout) instead of failing, so rolling restarts
+under load produced zero errors.
+
+## 14. Operations
 
 - **Images:** multi-stage builds, distroless `nonroot` runtime, static binaries (`CGO_ENABLED=0`, `-trimpath`).
 - **Health:** each service serves `/metrics` and `/healthz` (DB ping) on its metrics port; the gRPC health status follows the same check, and Kubernetes uses native gRPC readiness probes.

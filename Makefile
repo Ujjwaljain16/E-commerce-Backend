@@ -1,4 +1,4 @@
-.PHONY: help proto-gen test integration-test e2e coverage lint fmt build clean docker-up docker-down docker-logs monitoring-up k8s-render deps
+.PHONY: help proto-gen test integration-test e2e load coverage lint fmt build clean docker-up docker-down docker-logs monitoring-up k8s-render deps
 
 SERVICES := account catalog order payment notification graphql
 
@@ -21,6 +21,10 @@ integration-test:
 ## e2e: Run the end-to-end flow against a running stack (make docker-up first)
 e2e:
 	go test -count=1 -tags=e2e ./tests/e2e/...
+
+## load: 30s load test through the gateway (start the stack with a raised RATE_LIMIT_RPS)
+load:
+	go run ./tests/load -users 20 -duration 30s
 
 ## coverage: Unit test coverage report
 coverage:

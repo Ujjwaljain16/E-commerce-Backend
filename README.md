@@ -79,7 +79,20 @@ make test               # unit tests, no Docker
 make integration-test   # repository tests against throwaway Postgres containers
 make e2e                # full checkout saga against the running compose stack
 make lint               # gofmt, vet, staticcheck
+make load               # 20 users for 30s through the gateway (see below)
 ```
+
+### Load test
+
+`tests/load` mixes 70% product reads, 20% searches and 10% checkouts through the gateway. Measured on one laptop (i5-13450HX, 16 GB), with every service, Postgres, Kafka and Redis in Docker on the same machine as the load generator, 20 users for 30 s:
+
+| operation | req/s | p50 | p95 | p99 | errors |
+|---|---|---|---|---|---|
+| product | 1,272 | 3.1 ms | 10.1 ms | 18.1 ms | 0 |
+| searchProducts | 358 | 10.8 ms | 32.2 ms | 77.5 ms | 0 |
+| createOrder | 177 | 47.3 ms | 99.9 ms | 156 ms | 0 |
+
+That is ~1,800 req/s overall. All 5,320 orders were paid and confirmed within 12 s of the run ending. A run with the order service restarted mid-test also finished with 0 errors. The gateway limits each client IP, so run the stack with `RATE_LIMIT_RPS=100000 RATE_LIMIT_BURST=100000 docker compose up -d` first.
 
 ## Deploy
 
