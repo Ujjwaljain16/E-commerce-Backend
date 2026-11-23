@@ -36,7 +36,7 @@ Design choices and their trade-offs are in [decisions.md](decisions.md).
 
 ## Run it
 
-Requirements: Go 1.24+, Docker.
+Requirements: Go 1.26+, Docker.
 
 ```bash
 docker compose up -d --build                      # whole stack

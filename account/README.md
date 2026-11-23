@@ -21,7 +21,7 @@ The Account service provides user registration, authentication, profile manageme
 
 ## Tech Stack
 
-- **Language**: Go 1.24+
+- **Language**: Go 1.26+
 - **Database**: PostgreSQL 16
 - **Communication**: gRPC + Protocol Buffers
 - **Authentication**: JWT (HS256)
@@ -52,7 +52,7 @@ account/
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.26 or higher
 - PostgreSQL 16
 - Docker (for integration tests)
 

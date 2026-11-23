@@ -58,7 +58,8 @@ runs its own embedded migrations at startup, tracked in its own `<service>_schem
 logically; splitting into separate databases later is a connection-string change.
 
 The migration runner is ~100 lines and uses a Postgres advisory lock so replicas starting together
-don't race. `golang-migrate` was tried and rejected: it pulled the module to Go 1.26 and a newer gRPC.
+don't race. `golang-migrate` was considered but brings a large dependency tree for what is "apply
+these files in order once".
 
 ## 6. Authentication at the gateway, trusted internal network
 
@@ -111,7 +112,16 @@ The existing protos use `double` for prices and Postgres stores `DECIMAL(10,2)`.
 cents. Moving to integer minor units (`int64` cents) is the right fix but is a breaking API change across
 every service, so it is deferred.
 
-## 12. Operations
+## 12. Stay on a supported Go release
+
+**Decision.** The module targets Go 1.26 (`go 1.26.11`), and images build on `golang:1.26-alpine`.
+
+**Why.** Go only patches the two newest releases. On Go 1.24 govulncheck reported reachable standard
+library vulnerabilities (net/http, crypto/tls, crypto/x509) whose fixes exist only in 1.26.x, plus
+vulnerable `golang.org/x/net` and `klauspost/compress` versions. CI runs govulncheck so this is caught
+again when the next release ships.
+
+## 13. Operations
 
 - **Images:** multi-stage builds, distroless `nonroot` runtime, static binaries (`CGO_ENABLED=0`, `-trimpath`).
 - **Health:** each service serves `/metrics` and `/healthz` (DB ping) on its metrics port; the gRPC health status follows the same check, and Kubernetes uses native gRPC readiness probes.

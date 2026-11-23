@@ -18,7 +18,7 @@ The Catalog Service provides product catalog management functionality for the e-
 ## Architecture
 
 ### Tech Stack
-- **Language**: Go 1.24
+- **Language**: Go 1.26
 - **Database**: PostgreSQL 16
 - **RPC Framework**: gRPC
 - **Serialization**: Protocol Buffers (proto3)
@@ -92,7 +92,7 @@ See [PROTO_SCHEMA.md](./docs/PROTO_SCHEMA.md) for complete API documentation.
 ## Getting Started
 
 ### Prerequisites
-- Go 1.24+
+- Go 1.26+
 - PostgreSQL 16
 - Protocol Buffers compiler (`protoc`)
 - Docker (optional, for containerized deployment)
