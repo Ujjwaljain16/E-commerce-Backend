@@ -84,6 +84,7 @@ make lint               # gofmt, vet, staticcheck
 ## Deploy
 
 ```bash
+kubectl create namespace ecommerce
 kubectl -n ecommerce create secret generic ecommerce-secrets --from-env-file=secrets.env   # see k8s/base/infrastructure/secrets.example.yaml
 kubectl apply -k k8s
 ```

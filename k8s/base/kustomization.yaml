@@ -20,7 +20,7 @@ labels:
       app.kubernetes.io/part-of: ecommerce
     includeSelectors: false
 
-# The deploy workflow pins these to the commit SHA with `kustomize edit set image`.
+# Pin these to a commit SHA per environment with `kustomize edit set image`.
 images:
   - name: ghcr.io/ujjwaljain16/ecommerce-account
     newTag: latest
