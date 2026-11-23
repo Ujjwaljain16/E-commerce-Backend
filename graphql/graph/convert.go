@@ -115,25 +115,25 @@ func toOrder(o *orderpb.Order) *Order {
 	items := make([]*OrderItem, 0, len(o.GetItems()))
 	for _, it := range o.GetItems() {
 		items = append(items, &OrderItem{
-			ID:          it.GetId(),
-			ProductID:   it.GetProductId(),
-			ProductName: it.GetProductName(),
-			Quantity:    it.GetQuantity(),
+			ID:            it.GetId(),
+			ProductID:     it.GetProductId(),
+			ProductName:   it.GetProductName(),
+			Quantity:      it.GetQuantity(),
 			PriceCents:    it.GetPriceCents(),
 			SubtotalCents: it.GetSubtotalCents(),
 		})
 	}
 	return &Order{
-		ID:              o.GetId(),
-		UserID:          o.GetUserId(),
-		Status:          toOrderStatus(o.GetStatus()),
-		Items:           items,
+		ID:               o.GetId(),
+		UserID:           o.GetUserId(),
+		Status:           toOrderStatus(o.GetStatus()),
+		Items:            items,
 		TotalAmountCents: o.GetTotalAmountCents(),
-		ShippingAddress: o.GetShippingAddress(),
-		BillingAddress:  o.GetBillingAddress(),
-		PaymentMethod:   o.GetPaymentMethod(),
-		CreatedAt:       toTime(o.GetCreatedAt()),
-		UpdatedAt:       toTime(o.GetUpdatedAt()),
+		ShippingAddress:  o.GetShippingAddress(),
+		BillingAddress:   o.GetBillingAddress(),
+		PaymentMethod:    o.GetPaymentMethod(),
+		CreatedAt:        toTime(o.GetCreatedAt()),
+		UpdatedAt:        toTime(o.GetUpdatedAt()),
 	}
 }
 
