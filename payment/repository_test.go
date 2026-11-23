@@ -13,7 +13,7 @@ import (
 
 var paymentRowColumns = []string{
 	"id", "order_id", "user_id", "amount_cents", "currency", "status", "method",
-	"provider_ref", "failure_reason", "idempotency_key", "created_at", "updated_at",
+	"provider_ref", "failure_reason", "idempotency_key", "provider", "provider_order_id", "created_at", "updated_at",
 }
 
 const (
@@ -34,14 +34,14 @@ func paymentRow(status Status, providerRef string) *sqlmock.Rows {
 	now := time.Now()
 	return sqlmock.NewRows(paymentRowColumns).AddRow(
 		testPaymentID, testOrderID, testUserID, int64(4999), "USD", int64(status), "card",
-		providerRef, "", testOrderID, now, now)
+		providerRef, "", testOrderID, ProviderMock, "", now, now)
 }
 
 func TestRepositoryInsertCreatesPayment(t *testing.T) {
 	repo, mock := newMockRepo(t)
 
 	mock.ExpectQuery(`INSERT INTO payments .* ON CONFLICT DO NOTHING`).
-		WithArgs(testPaymentID, testOrderID, testUserID, int64(4999), "USD", StatusPending, "card", "", testOrderID).
+		WithArgs(testPaymentID, testOrderID, testUserID, int64(4999), "USD", StatusPending, "card", "", testOrderID, ProviderMock).
 		WillReturnRows(paymentRow(StatusPending, ""))
 
 	p, created, err := repo.Insert(context.Background(), &Payment{
