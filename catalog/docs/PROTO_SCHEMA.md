@@ -38,7 +38,7 @@ message Product {
   string id = 1;
   string name = 2;
   string description = 3;
-  double price = 4;
+  int64 price_cents = 4;
   string sku = 5;
   int32 stock = 6;
   repeated string images = 7;
@@ -53,7 +53,7 @@ message Product {
 | `id` | string | 1 | UUID of the product |
 | `name` | string | 2 | Product name |
 | `description` | string | 3 | Product description (optional) |
-| `price` | double | 4 | Product price (must be >= 0) |
+| `price_cents` | int64 | 4 | Product price in cents |
 | `sku` | string | 5 | Stock Keeping Unit (unique identifier) |
 | `stock` | int32 | 6 | Available inventory count (must be >= 0) |
 | `images` | repeated string | 7 | Array of image URLs |
@@ -64,7 +64,7 @@ message Product {
 **Notes**:
 - `id` is a UUID v4 string
 - `sku` is immutable after creation
-- `price` stored as DECIMAL(10,2) in database, sent as double
+- `price_cents` is an integer number of cents end to end (BIGINT in the database), never a float
 - `images` can be empty array
 - Timestamps use `google.protobuf.Timestamp` for interoperability
 
@@ -80,7 +80,7 @@ Request to create a new product in the catalog.
 message CreateProductRequest {
   string name = 1;
   string description = 2;
-  double price = 3;
+  int64 price_cents = 3;
   string sku = 4;
   int32 stock = 5;
   repeated string images = 6;
@@ -92,7 +92,7 @@ message CreateProductRequest {
 |-------|------|-----|----------|------------|
 | `name` | string | 1 | Yes | Non-empty |
 | `description` | string | 2 | No | Optional |
-| `price` | double | 3 | Yes | Must be > 0 |
+| `price_cents` | int64 | 3 | Yes | Must be > 0 and <= 1e12 |
 | `sku` | string | 4 | Yes | Non-empty, must be unique |
 | `stock` | int32 | 5 | Yes | Must be >= 0 |
 | `images` | repeated string | 6 | No | Optional array of URLs |
@@ -208,7 +208,7 @@ message UpdateProductRequest {
   string id = 1;
   string name = 2;
   string description = 3;
-  double price = 4;
+  int64 price_cents = 4;
   int32 stock = 5;
   repeated string images = 6;
   string category = 7;
@@ -220,7 +220,7 @@ message UpdateProductRequest {
 | `id` | string | 1 | Yes | Product UUID |
 | `name` | string | 2 | Yes | Non-empty |
 | `description` | string | 3 | No | Optional |
-| `price` | double | 4 | Yes | Must be > 0 |
+| `price_cents` | int64 | 4 | Yes | Must be > 0 and <= 1e12 |
 | `stock` | int32 | 5 | Yes | Must be >= 0 |
 | `images` | repeated string | 6 | No | Optional array of URLs |
 | `category` | string | 7 | No | Optional |
@@ -363,8 +363,8 @@ message SearchProductsResponse {
 
 #### Price
 - **Required**: Yes
-- **Constraints**: Must be > 0
-- **Type**: double (2 decimal places in DB)
+- **Constraints**: Must be > 0 and <= 1e12
+- **Type**: int64 cents (`price_cents`)
 
 #### SKU
 - **Required**: Yes (on create)
@@ -393,7 +393,7 @@ message SearchProductsResponse {
 req := &pb.CreateProductRequest{
     Name:        "Laptop",
     Description: "High-performance laptop",
-    Price:       1299.99,
+    PriceCents:  129999,
     Sku:         "LAPTOP-001",
     Stock:       50,
     Images:      []string{"https://example.com/img1.jpg"},
@@ -427,7 +427,7 @@ resp, err := client.SearchProducts(ctx, req)
 req := &pb.UpdateProductRequest{
     Id:          "550e8400-e29b-41d4-a716-446655440000",
     Name:        "Updated Laptop",
-    Price:       1199.99,
+    PriceCents:  119999,
     Stock:       45,
     Images:      []string{"https://example.com/new.jpg"},
     Category:    "Electronics",
@@ -439,7 +439,7 @@ resp, err := client.UpdateProduct(ctx, req)
 
 1. **SKU Management**: Use consistent SKU naming conventions across your organization
 2. **Image URLs**: Store absolute URLs pointing to CDN or image service
-3. **Price Handling**: Use `math.Round(price * 100) / 100` for 2 decimal precision
+3. **Price Handling**: Send integer cents (`price_cents`); never convert through a float
 4. **Pagination**: Use reasonable page_size (10-100) to balance performance and UX
 5. **Search**: Sanitize search queries to prevent injection attacks
 6. **Error Handling**: Always check gRPC status codes in client applications

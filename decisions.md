@@ -99,7 +99,7 @@ because invalidation would be broad for little gain at this scale.
 ## 9. Mock payment provider behind an interface
 
 **Decision.** `payment.Processor` has a mock implementation that declines `card_declined` and amounts
-over 10,000. A real provider (e.g. Stripe) is a new implementation of the same interface, using our
+over $10,000 (1,000,000 cents). A real provider (e.g. Stripe) is a new implementation of the same interface, using our
 idempotency key as the provider's idempotency key.
 
 ## 10. gRPC between services, GraphQL at the edge
@@ -112,11 +112,25 @@ leaking internal messages. Playground and introspection are off unless `PLAYGROU
 Rate limits are per replica; with N gateway replicas the effective limit is roughly N× higher. A shared
 Redis limiter is the upgrade path if that matters.
 
-## 11. Money as `double` (known limitation)
+## 11. Money as integer cents
 
-The existing protos use `double` for prices and Postgres stores `DECIMAL(10,2)`. Totals are rounded to
-cents. Moving to integer minor units (`int64` cents) is the right fix but is a breaking API change across
-every service, so it is deferred.
+**Decision.** Every amount is an `int64` number of minor units (cents; the only currency is USD) end to
+end: proto fields are `*_cents` (`price_cents`, `unit_price_cents`, `subtotal_cents`,
+`total_amount_cents`, `amount_cents`), Kafka events carry the same names, and Postgres stores `BIGINT`
+columns with `CHECK (... >= 0)`. Order subtotals are `quantity * unit_price_cents` and the total is their
+sum, both in integer math that refuses to overflow instead of wrapping. Notification emails format cents
+as dollars (`$39.98`) with integer division.
+
+GraphQL exposes these fields as a `Money` scalar backed by gqlgen's `Int64` (`priceCents`,
+`subtotalCents`, `totalAmountCents`, `amountCents`). GraphQL's built-in `Int` is 32-bit, which caps out
+at about $21M and would make large order totals unrepresentable; a 64-bit scalar avoids that without any
+custom marshalling code. Fractional input such as `12.5` is rejected.
+
+Catalog accepts `0 < price_cents <= 1e12` and returns `InvalidArgument` otherwise.
+
+**Why.** `double` cannot represent most decimal amounts exactly, so totals needed rounding hacks and
+could drift from what was charged. Existing `DECIMAL` data was converted by new migrations
+(`round(x * 100)::bigint`); wire compatibility was broken deliberately since nothing is deployed.
 
 ## 12. Stay on a supported Go release
 

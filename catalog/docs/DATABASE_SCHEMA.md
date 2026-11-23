@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    price_cents BIGINT NOT NULL CHECK (price_cents >= 0),
     sku VARCHAR(100) UNIQUE NOT NULL,
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     images TEXT[],
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS products (
 | `id` | VARCHAR(36) | PRIMARY KEY | - | UUID identifier for the product |
 | `name` | VARCHAR(255) | NOT NULL | - | Product name |
 | `description` | TEXT | - | - | Product description (optional) |
-| `price` | DECIMAL(10, 2) | NOT NULL, CHECK | - | Product price with 2 decimal places |
+| `price_cents` | BIGINT | NOT NULL, CHECK | - | Product price in cents (integer minor units) |
 | `sku` | VARCHAR(100) | UNIQUE NOT NULL | - | Stock Keeping Unit (unique identifier) |
 | `stock` | INTEGER | NOT NULL, CHECK | 0 | Available inventory count |
 | `images` | TEXT[] | - | - | Array of image URLs |
@@ -45,9 +45,9 @@ CREATE TABLE IF NOT EXISTS products (
 
 - **Primary Key**: `id` - Unique identifier
 - **Unique**: `sku` - Ensures no duplicate SKUs
-- **Check Constraint**: `price >= 0` - Enforces non-negative prices
+- **Check Constraint**: `price_cents >= 0` - Enforces non-negative prices
 - **Check Constraint**: `stock >= 0` - Enforces non-negative stock levels
-- **Not Null**: `name`, `price`, `sku`, `stock` - Required fields
+- **Not Null**: `name`, `price_cents`, `sku`, `stock` - Required fields
 
 #### Indexes
 
@@ -83,10 +83,9 @@ CREATE INDEX idx_products_name ON products(name);
 - **Generation**: `github.com/google/uuid`
 
 ### Price Format
-- **Type**: DECIMAL(10, 2)
-- **Range**: 0.00 to 99,999,999.99
-- **Precision**: 2 decimal places
-- **Example**: `29.99`, `1499.00`
+- **Type**: BIGINT, integer cents (migration `005_prices_in_cents` converted the old DECIMAL column)
+- **Range**: 1 to 1,000,000,000,000 (the service rejects anything else)
+- **Example**: `2999` ($29.99), `149900` ($1,499.00)
 
 ### SKU Format
 - **Type**: VARCHAR(100)
@@ -109,21 +108,21 @@ CREATE INDEX idx_products_name ON products(name);
 
 ### Create Product
 ```sql
-INSERT INTO products (id, name, description, price, sku, stock, images, category, created_at, updated_at)
+INSERT INTO products (id, name, description, price_cents, sku, stock, images, category, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at;
+RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at;
 ```
 
 ### Get Product by SKU
 ```sql
-SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 FROM products
 WHERE sku = $1;
 ```
 
 ### List Products with Category Filter and Pagination
 ```sql
-SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 FROM products
 WHERE category = $1
 ORDER BY created_at DESC
@@ -132,7 +131,7 @@ LIMIT $2 OFFSET $3;
 
 ### Search Products by Name
 ```sql
-SELECT id, name, description, price, sku, stock, images, category, created_at, updated_at
+SELECT id, name, description, price_cents, sku, stock, images, category, created_at, updated_at
 FROM products
 WHERE name ILIKE $1
 ORDER BY name
@@ -142,14 +141,14 @@ LIMIT $2 OFFSET $3;
 ### Update Product (SKU Immutable)
 ```sql
 UPDATE products
-SET name = $2, description = $3, price = $4, stock = $5, images = $6, category = $7, updated_at = $8
+SET name = $2, description = $3, price_cents = $4, stock = $5, images = $6, category = $7, updated_at = $8
 WHERE id = $1
-RETURNING id, name, description, price, sku, stock, images, category, created_at, updated_at;
+RETURNING id, name, description, price_cents, sku, stock, images, category, created_at, updated_at;
 ```
 
 ## Business Rules
 
-1. **Price Validation**: Prices must be non-negative (>= 0)
+1. **Price Validation**: The service requires 0 < price_cents <= 1e12; the column itself only enforces >= 0
 2. **Stock Validation**: Stock levels must be non-negative (>= 0)
 3. **SKU Uniqueness**: Each product must have a unique SKU
 4. **SKU Immutability**: SKU cannot be changed after product creation

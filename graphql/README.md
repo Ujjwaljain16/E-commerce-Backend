@@ -96,11 +96,13 @@ Browse the catalog (no auth needed):
 query {
   products(page: 1, pageSize: 10, category: "books") {
     total
-    items { id name price stock }
+    items { id name priceCents stock }
   }
   searchProducts(query: "lamp") { items { id name } }
 }
 ```
+
+Money is always a `Money` scalar: an integer number of cents (`4950` is $49.50), 64-bit, never a float.
 
 Place and inspect orders (auth required). Only product IDs and quantities are sent to the order service; clients cannot set prices:
 
@@ -112,15 +114,15 @@ mutation {
     billingAddress: "1 Main St"
     paymentMethod: "card"
   }) {
-    id status totalAmount
-    items { productName quantity price subtotal }
+    id status totalAmountCents
+    items { productName quantity priceCents subtotalCents }
   }
 }
 
 query {
   me { id email name }
-  myOrders(pageSize: 5) { total items { id status totalAmount } }
-  paymentForOrder(orderId: "o-456") { status amount currency }
+  myOrders(pageSize: 5) { total items { id status totalAmountCents } }
+  paymentForOrder(orderId: "o-456") { status amountCents currency }
   myNotifications { items { subject status createdAt } }
 }
 ```

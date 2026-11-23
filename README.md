@@ -57,7 +57,7 @@ mutation { register(input: {email: "jo@example.com", password: "password123", na
 
 ```graphql
 # Authorization: Bearer <admin token>
-mutation { createProduct(input: {name: "Grinder", price: 49.5, sku: "GR-1", stock: 10}) { id } }
+mutation { createProduct(input: {name: "Grinder", priceCents: 4950, sku: "GR-1", stock: 10}) { id } }
 ```
 
 ```graphql
@@ -66,7 +66,7 @@ mutation {
   createOrder(input: {
     items: [{productId: "<id>", quantity: 2}]
     shippingAddress: "221B Baker Street", billingAddress: "221B Baker Street", paymentMethod: "card"
-  }) { id status totalAmount }
+  }) { id status totalAmountCents }
 }
 ```
 
