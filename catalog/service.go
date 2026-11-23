@@ -11,6 +11,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// maxPriceCents caps a single product price at $10 billion; anything above is a client bug.
+const maxPriceCents = 1_000_000_000_000
+
+func validatePriceCents(cents int64) error {
+	if cents <= 0 {
+		return status.Error(codes.InvalidArgument, "price_cents must be positive")
+	}
+	if cents > maxPriceCents {
+		return status.Error(codes.InvalidArgument, "price_cents is too large")
+	}
+	return nil
+}
+
 // Service implements the CatalogService gRPC interface
 type Service struct {
 	pb.UnimplementedCatalogServiceServer
@@ -37,9 +50,9 @@ func (s *Service) CreateProduct(ctx context.Context, req *pb.CreateProductReques
 		s.log.Warn(ctx, "Create product failed: SKU is required", nil)
 		return nil, status.Error(codes.InvalidArgument, "sku is required")
 	}
-	if req.Price <= 0 {
-		s.log.Warn(ctx, "Create product failed: price must be positive", nil)
-		return nil, status.Error(codes.InvalidArgument, "price must be positive")
+	if err := validatePriceCents(req.PriceCents); err != nil {
+		s.log.Warn(ctx, "Create product failed: invalid price", map[string]interface{}{"price_cents": req.PriceCents})
+		return nil, err
 	}
 	if req.Stock < 0 {
 		s.log.Warn(ctx, "Create product failed: stock cannot be negative", nil)
@@ -57,7 +70,7 @@ func (s *Service) CreateProduct(ctx context.Context, req *pb.CreateProductReques
 	product := &Product{
 		Name:        req.Name,
 		Description: req.Description,
-		Price:       req.Price,
+		PriceCents:  req.PriceCents,
 		SKU:         req.Sku,
 		Stock:       req.Stock,
 		Images:      req.Images,
@@ -146,9 +159,9 @@ func (s *Service) UpdateProduct(ctx context.Context, req *pb.UpdateProductReques
 		s.log.Warn(ctx, "Update product failed: name is required", nil)
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
-	if req.Price <= 0 {
-		s.log.Warn(ctx, "Update product failed: price must be positive", nil)
-		return nil, status.Error(codes.InvalidArgument, "price must be positive")
+	if err := validatePriceCents(req.PriceCents); err != nil {
+		s.log.Warn(ctx, "Update product failed: invalid price", map[string]interface{}{"price_cents": req.PriceCents})
+		return nil, err
 	}
 	if req.Stock < 0 {
 		s.log.Warn(ctx, "Update product failed: stock cannot be negative", nil)
@@ -167,7 +180,7 @@ func (s *Service) UpdateProduct(ctx context.Context, req *pb.UpdateProductReques
 		ID:          existing.ID,
 		Name:        req.Name,
 		Description: req.Description,
-		Price:       req.Price,
+		PriceCents:  req.PriceCents,
 		SKU:         existing.SKU, // SKU cannot be updated
 		Stock:       req.Stock,
 		Images:      req.Images,
@@ -260,7 +273,7 @@ func toProtoProduct(p *Product) *pb.Product {
 		Id:          p.ID,
 		Name:        p.Name,
 		Description: p.Description,
-		Price:       p.Price,
+		PriceCents:  p.PriceCents,
 		Sku:         p.SKU,
 		Stock:       p.Stock,
 		Images:      p.Images,

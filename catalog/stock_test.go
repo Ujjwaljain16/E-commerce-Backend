@@ -26,7 +26,7 @@ func TestReserveStock_MergesDuplicateLines(t *testing.T) {
 	var got []StockItem
 	svc := setupService(&MockRepository{ReserveFunc: func(_ context.Context, _ string, items []StockItem) ([]ReservedItem, error) {
 		got = items
-		return []ReservedItem{{ProductID: productA, ProductName: "A", Quantity: 3, UnitPrice: 9.5}}, nil
+		return []ReservedItem{{ProductID: productA, ProductName: "A", Quantity: 3, UnitPriceCents: 950}}, nil
 	}})
 
 	resp, err := svc.ReserveStock(context.Background(), &pb.ReserveStockRequest{
@@ -39,7 +39,7 @@ func TestReserveStock_MergesDuplicateLines(t *testing.T) {
 	if len(got) != 1 || got[0].Quantity != 3 {
 		t.Fatalf("expected one merged line with quantity 3, got %+v", got)
 	}
-	if resp.Items[0].UnitPrice != 9.5 || resp.Items[0].ProductName != "A" {
+	if resp.Items[0].UnitPriceCents != 950 || resp.Items[0].ProductName != "A" {
 		t.Fatalf("unexpected response %+v", resp.Items[0])
 	}
 }
@@ -88,7 +88,7 @@ func TestRepositoryReserveStock_LocksInProductOrder(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO stock_reservations`).WithArgs(testOrderID).WillReturnResult(sqlmock.NewResult(0, 1))
 	for _, id := range []string{productA, productB} {
 		mock.ExpectQuery(`UPDATE products SET stock = stock - \$2`).WithArgs(id, int32(2)).
-			WillReturnRows(sqlmock.NewRows([]string{"name", "price"}).AddRow("p", 5.0))
+			WillReturnRows(sqlmock.NewRows([]string{"name", "price_cents"}).AddRow("p", 500))
 		mock.ExpectExec(`INSERT INTO stock_reservation_items`).WillReturnResult(sqlmock.NewResult(0, 1))
 	}
 	mock.ExpectCommit()
@@ -116,7 +116,7 @@ func TestRepositoryReserveStock_InsufficientStockRollsBack(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`INSERT INTO stock_reservations`).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`UPDATE products SET stock`).WillReturnRows(sqlmock.NewRows([]string{"name", "price"}))
+	mock.ExpectQuery(`UPDATE products SET stock`).WillReturnRows(sqlmock.NewRows([]string{"name", "price_cents"}))
 	mock.ExpectQuery(`SELECT EXISTS`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectRollback()
 

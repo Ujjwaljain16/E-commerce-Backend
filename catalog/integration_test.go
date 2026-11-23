@@ -88,7 +88,7 @@ func TestIntegration_CreateProduct(t *testing.T) {
 	req := &pb.CreateProductRequest{
 		Name:        "Integration Test Product",
 		Description: "Test Description",
-		Price:       99.99,
+		PriceCents:  9999,
 		Sku:         "INT-TEST-001",
 		Stock:       50,
 		Images:      []string{"image1.jpg", "image2.jpg"},
@@ -113,8 +113,8 @@ func TestIntegration_CreateProduct(t *testing.T) {
 		t.Errorf("Expected SKU %s, got %s", req.Sku, resp.Product.Sku)
 	}
 
-	if resp.Product.Price != req.Price {
-		t.Errorf("Expected price %f, got %f", req.Price, resp.Product.Price)
+	if resp.Product.PriceCents != req.PriceCents {
+		t.Errorf("Expected price %d, got %d", req.PriceCents, resp.Product.PriceCents)
 	}
 
 	if resp.Product.Stock != req.Stock {
@@ -138,11 +138,11 @@ func TestIntegration_CreateProduct_DuplicateSKU(t *testing.T) {
 
 	// Create first product
 	req := &pb.CreateProductRequest{
-		Name:     "Test Product",
-		Price:    99.99,
-		Sku:      "DUPLICATE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Test Product",
+		PriceCents: 9999,
+		Sku:        "DUPLICATE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	_, err := service.CreateProduct(ctx, req)
@@ -175,11 +175,11 @@ func TestIntegration_GetProduct(t *testing.T) {
 
 	// Create product first
 	createReq := &pb.CreateProductRequest{
-		Name:     "Test Get Product",
-		Price:    149.99,
-		Sku:      "GET-TEST-001",
-		Stock:    20,
-		Category: "Books",
+		Name:       "Test Get Product",
+		PriceCents: 14999,
+		Sku:        "GET-TEST-001",
+		Stock:      20,
+		Category:   "Books",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -227,11 +227,11 @@ func TestIntegration_ListProducts(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: p.category,
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   p.category,
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -283,11 +283,11 @@ func TestIntegration_ListProducts_WithCategory(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: p.category,
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   p.category,
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -329,11 +329,11 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 
 	// Create product
 	createReq := &pb.CreateProductRequest{
-		Name:     "Original Product",
-		Price:    99.99,
-		Sku:      "UPDATE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Original Product",
+		PriceCents: 9999,
+		Sku:        "UPDATE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -346,7 +346,7 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 		Id:          createResp.Product.Id,
 		Name:        "Updated Product",
 		Description: "Updated Description",
-		Price:       199.99,
+		PriceCents:  19999,
 		Stock:       20,
 		Images:      []string{"new-image.jpg"},
 		Category:    "Books",
@@ -362,8 +362,8 @@ func TestIntegration_UpdateProduct(t *testing.T) {
 		t.Errorf("Expected name %s, got %s", updateReq.Name, updateResp.Product.Name)
 	}
 
-	if updateResp.Product.Price != updateReq.Price {
-		t.Errorf("Expected price %f, got %f", updateReq.Price, updateResp.Product.Price)
+	if updateResp.Product.PriceCents != updateReq.PriceCents {
+		t.Errorf("Expected price %d, got %d", updateReq.PriceCents, updateResp.Product.PriceCents)
 	}
 
 	if updateResp.Product.Stock != updateReq.Stock {
@@ -388,11 +388,11 @@ func TestIntegration_DeleteProduct(t *testing.T) {
 
 	// Create product
 	createReq := &pb.CreateProductRequest{
-		Name:     "Product to Delete",
-		Price:    99.99,
-		Sku:      "DELETE-001",
-		Stock:    10,
-		Category: "Electronics",
+		Name:       "Product to Delete",
+		PriceCents: 9999,
+		Sku:        "DELETE-001",
+		Stock:      10,
+		Category:   "Electronics",
 	}
 
 	createResp, err := service.CreateProduct(ctx, createReq)
@@ -448,11 +448,11 @@ func TestIntegration_SearchProducts(t *testing.T) {
 
 	for _, p := range products {
 		req := &pb.CreateProductRequest{
-			Name:     p.name,
-			Price:    99.99,
-			Sku:      p.sku,
-			Stock:    10,
-			Category: "Electronics",
+			Name:       p.name,
+			PriceCents: 9999,
+			Sku:        p.sku,
+			Stock:      10,
+			Category:   "Electronics",
 		}
 		_, err := service.CreateProduct(ctx, req)
 		if err != nil {
@@ -495,7 +495,7 @@ func TestIntegration_ReservationExpiryAndLateCommit(t *testing.T) {
 	ctx := context.Background()
 	repo := service.repo.(*postgresRepository)
 
-	created, err := service.CreateProduct(ctx, &pb.CreateProductRequest{Name: "Kettle", Price: 30, Sku: "EXP-1", Stock: 5})
+	created, err := service.CreateProduct(ctx, &pb.CreateProductRequest{Name: "Kettle", PriceCents: 3000, Sku: "EXP-1", Stock: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
