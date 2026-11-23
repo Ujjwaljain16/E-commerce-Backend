@@ -53,21 +53,32 @@ type Relay struct {
 	log       *logger.Logger
 	interval  time.Duration
 	batchSize int
+	retention time.Duration
 }
 
 // NewRelay creates a relay for the given table.
 func NewRelay(db *sql.DB, table string, pub kafka.Publisher, log *logger.Logger) *Relay {
-	return &Relay{db: db, table: table, pub: pub, log: log, interval: 500 * time.Millisecond, batchSize: 100}
+	return &Relay{db: db, table: table, pub: pub, log: log, interval: 500 * time.Millisecond, batchSize: 100, retention: 7 * 24 * time.Hour}
 }
 
 // Run publishes pending events until ctx is cancelled.
 func (r *Relay) Run(ctx context.Context) {
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
+	prune := time.NewTicker(time.Hour)
+	defer prune.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-prune.C:
+			if n, err := r.Prune(ctx, r.retention); err != nil {
+				if ctx.Err() == nil {
+					r.log.Error(ctx, "outbox prune failed", map[string]interface{}{"error": err.Error(), "table": r.table})
+				}
+			} else if n > 0 {
+				r.log.Info(ctx, "outbox pruned", map[string]interface{}{"table": r.table, "rows": n})
+			}
 		case <-t.C:
 			for {
 				n, err := r.flush(ctx)
@@ -81,6 +92,29 @@ func (r *Relay) Run(ctx context.Context) {
 					break
 				}
 			}
+		}
+	}
+}
+
+// Prune deletes events published more than olderThan ago. Published rows are only kept for
+// debugging and replay; without pruning the table grows with every order forever.
+// It deletes in batches so a large backlog never holds one long lock.
+func (r *Relay) Prune(ctx context.Context, olderThan time.Duration) (int64, error) {
+	var total int64
+	q := fmt.Sprintf(`DELETE FROM %[1]s WHERE id IN (
+		SELECT id FROM %[1]s WHERE published_at < NOW() - make_interval(secs => $1) LIMIT 5000)`, r.table)
+	for {
+		res, err := r.db.ExecContext(ctx, q, olderThan.Seconds())
+		if err != nil {
+			return total, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n < 5000 {
+			return total, nil
 		}
 	}
 }
