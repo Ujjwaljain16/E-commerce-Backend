@@ -152,7 +152,7 @@ func newTestService() (*Service, *fakeRepo, *countingProcessor) {
 }
 
 func validInput() ProcessInput {
-	return ProcessInput{OrderID: testOrderID, UserID: testUserID, Amount: 49.99, Currency: "usd", Method: "card"}
+	return ProcessInput{OrderID: testOrderID, UserID: testUserID, AmountCents: 4999, Currency: "usd", Method: "card"}
 }
 
 func TestProcessChargesAndQueuesSucceededEvent(t *testing.T) {
@@ -207,7 +207,7 @@ func TestProcessDeclineIsFailedPaymentNotError(t *testing.T) {
 		reason string
 	}{
 		{"declined card", func(in *ProcessInput) { in.Method = "card_declined" }, "card declined"},
-		{"over limit", func(in *ProcessInput) { in.Amount = 10000.01 }, "amount exceeds limit"},
+		{"over limit", func(in *ProcessInput) { in.AmountCents = 1_000_001 }, "amount exceeds limit"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestProcessDeclineIsFailedPaymentNotError(t *testing.T) {
 			tt.mutate(&in)
 
 			resp, err := svc.ProcessPayment(context.Background(), &pb.ProcessPaymentRequest{
-				OrderId: in.OrderID, UserId: in.UserID, Amount: in.Amount, Method: in.Method,
+				OrderId: in.OrderID, UserId: in.UserID, AmountCents: in.AmountCents, Method: in.Method,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, pb.PaymentStatus_PAYMENT_STATUS_FAILED, resp.Payment.Status)
@@ -252,12 +252,12 @@ func TestProcessPaymentValidation(t *testing.T) {
 		name string
 		req  *pb.ProcessPaymentRequest
 	}{
-		{"missing order", &pb.ProcessPaymentRequest{UserId: testUserID, Amount: 10}},
-		{"bad order id", &pb.ProcessPaymentRequest{OrderId: "nope", UserId: testUserID, Amount: 10}},
-		{"missing user", &pb.ProcessPaymentRequest{OrderId: testOrderID, Amount: 10}},
+		{"missing order", &pb.ProcessPaymentRequest{UserId: testUserID, AmountCents: 1000}},
+		{"bad order id", &pb.ProcessPaymentRequest{OrderId: "nope", UserId: testUserID, AmountCents: 1000}},
+		{"missing user", &pb.ProcessPaymentRequest{OrderId: testOrderID, AmountCents: 1000}},
 		{"zero amount", &pb.ProcessPaymentRequest{OrderId: testOrderID, UserId: testUserID}},
-		{"negative amount", &pb.ProcessPaymentRequest{OrderId: testOrderID, UserId: testUserID, Amount: -1}},
-		{"bad currency", &pb.ProcessPaymentRequest{OrderId: testOrderID, UserId: testUserID, Amount: 10, Currency: "EURO"}},
+		{"negative amount", &pb.ProcessPaymentRequest{OrderId: testOrderID, UserId: testUserID, AmountCents: -100}},
+		{"bad currency", &pb.ProcessPaymentRequest{OrderId: testOrderID, UserId: testUserID, AmountCents: 1000, Currency: "EURO"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -274,7 +274,7 @@ func TestProcessPaymentInternalErrorIsHidden(t *testing.T) {
 	repo.failNext = errors.New("connection reset")
 
 	_, err := svc.ProcessPayment(context.Background(), &pb.ProcessPaymentRequest{
-		OrderId: testOrderID, UserId: testUserID, Amount: 10,
+		OrderId: testOrderID, UserId: testUserID, AmountCents: 1000,
 	})
 	assert.Equal(t, codes.Internal, status.Code(err))
 	assert.NotContains(t, err.Error(), "connection reset")

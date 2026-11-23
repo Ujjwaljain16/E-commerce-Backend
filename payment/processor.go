@@ -11,7 +11,7 @@ import (
 type ChargeRequest struct {
 	PaymentID      string
 	OrderID        string
-	Amount         float64
+	AmountCents    int64
 	Currency       string
 	Method         string
 	IdempotencyKey string
@@ -20,7 +20,7 @@ type ChargeRequest struct {
 // RefundRequest reverses a previous successful charge.
 type RefundRequest struct {
 	ProviderRef string
-	Amount      float64
+	AmountCents int64
 	Currency    string
 	Reason      string
 }
@@ -40,10 +40,11 @@ type Processor interface {
 	Refund(ctx context.Context, req RefundRequest) error
 }
 
-// mockChargeLimit is the largest amount MockProcessor will accept, so large orders can exercise the failure path.
-const mockChargeLimit = 10000
+// mockChargeLimitCents is the largest amount MockProcessor will accept ($10,000), so large orders can
+// exercise the failure path.
+const mockChargeLimitCents = 1_000_000
 
-// MockProcessor approves everything except the "card_declined" method and amounts above 10000.
+// MockProcessor approves everything except the "card_declined" method and amounts above $10,000.
 type MockProcessor struct{}
 
 // Charge implements Processor.
@@ -51,7 +52,7 @@ func (MockProcessor) Charge(_ context.Context, req ChargeRequest) (string, error
 	if req.Method == "card_declined" {
 		return "", &DeclineError{Reason: "card declined"}
 	}
-	if req.Amount > mockChargeLimit {
+	if req.AmountCents > mockChargeLimitCents {
 		return "", &DeclineError{Reason: "amount exceeds limit"}
 	}
 	return "mock_" + uuid.NewString(), nil

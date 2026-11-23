@@ -12,7 +12,7 @@ import (
 )
 
 var paymentRowColumns = []string{
-	"id", "order_id", "user_id", "amount", "currency", "status", "method",
+	"id", "order_id", "user_id", "amount_cents", "currency", "status", "method",
 	"provider_ref", "failure_reason", "idempotency_key", "created_at", "updated_at",
 }
 
@@ -33,7 +33,7 @@ func newMockRepo(t *testing.T) (Repository, sqlmock.Sqlmock) {
 func paymentRow(status Status, providerRef string) *sqlmock.Rows {
 	now := time.Now()
 	return sqlmock.NewRows(paymentRowColumns).AddRow(
-		testPaymentID, testOrderID, testUserID, "49.99", "USD", int64(status), "card",
+		testPaymentID, testOrderID, testUserID, int64(4999), "USD", int64(status), "card",
 		providerRef, "", testOrderID, now, now)
 }
 
@@ -41,16 +41,16 @@ func TestRepositoryInsertCreatesPayment(t *testing.T) {
 	repo, mock := newMockRepo(t)
 
 	mock.ExpectQuery(`INSERT INTO payments .* ON CONFLICT DO NOTHING`).
-		WithArgs(testPaymentID, testOrderID, testUserID, 49.99, "USD", StatusPending, "card", "", testOrderID).
+		WithArgs(testPaymentID, testOrderID, testUserID, int64(4999), "USD", StatusPending, "card", "", testOrderID).
 		WillReturnRows(paymentRow(StatusPending, ""))
 
 	p, created, err := repo.Insert(context.Background(), &Payment{
-		ID: testPaymentID, OrderID: testOrderID, UserID: testUserID, Amount: 49.99, Currency: "USD",
+		ID: testPaymentID, OrderID: testOrderID, UserID: testUserID, AmountCents: 4999, Currency: "USD",
 		Status: StatusPending, Method: "card", IdempotencyKey: testOrderID,
 	})
 	require.NoError(t, err)
 	assert.True(t, created)
-	assert.Equal(t, 49.99, p.Amount)
+	assert.Equal(t, int64(4999), p.AmountCents)
 	assert.Equal(t, StatusPending, p.Status)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -64,7 +64,7 @@ func TestRepositoryInsertReturnsExistingOnConflict(t *testing.T) {
 		WillReturnRows(paymentRow(StatusSucceeded, "mock_ref"))
 
 	p, created, err := repo.Insert(context.Background(), &Payment{
-		ID: "another-id", OrderID: testOrderID, UserID: testUserID, Amount: 49.99, Currency: "USD",
+		ID: "another-id", OrderID: testOrderID, UserID: testUserID, AmountCents: 4999, Currency: "USD",
 		Status: StatusPending, IdempotencyKey: testOrderID,
 	})
 	require.NoError(t, err)
