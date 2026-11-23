@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Ujjwaljain16/E-commerce-Backend/pkg/database"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,6 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		postgres.WithInitScripts("migrations/001_create_orders_table.up.sql", "migrations/002_create_order_outbox.up.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -41,6 +41,9 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	err = db.Ping()
 	require.NoError(t, err)
+
+	// Same embedded migrations the service applies at startup, so tests track schema changes.
+	require.NoError(t, database.Migrate(ctx, db, Migrations, "migrations", "order_schema_migrations"))
 
 	cleanup := func() {
 		db.Close()
