@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dev checkout</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  .warn { background: #fff4d6; border: 1px solid #e0c060; padding: .5rem .75rem; border-radius: 4px; }
+  label { display: block; margin-top: .75rem; font-weight: 600; }
+  input { width: 100%; padding: .4rem; box-sizing: border-box; font: inherit; }
+  button { margin-top: 1rem; padding: .5rem 1.25rem; font: inherit; cursor: pointer; }
+  pre { background: #f4f4f4; padding: .75rem; white-space: pre-wrap; word-break: break-word; min-height: 4rem; }
+</style>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+<h1>Dev checkout</h1>
+<p class="warn">Development only. Served because <code>PLAYGROUND_ENABLED=true</code>. Use Razorpay <strong>test</strong> keys.</p>
+
+<form id="form">
+  <label>Email <input name="email" type="email" required></label>
+  <label>Password <input name="password" type="password" required></label>
+  <label>Product ID <input name="productId" required></label>
+  <label>Quantity <input name="quantity" type="number" min="1" value="1" required></label>
+  <label>Shipping address <input name="address" value="221B Baker Street" required></label>
+  <button type="submit">Place order and pay</button>
+</form>
+
+<h2>Progress</h2>
+<pre id="log"></pre>
+
+<script>
+const logEl = document.getElementById('log');
+const log = (msg) => { logEl.textContent += msg + '\n'; };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function gql(query, variables, token) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch('/graphql', { method: 'POST', headers, body: JSON.stringify({ query, variables }) });
+  const body = await res.json();
+  if (body.errors) {
+    const err = new Error(body.errors.map((e) => e.message).join('; '));
+    err.code = body.errors[0].extensions && body.errors[0].extensions.code;
+    throw err;
+  }
+  return body.data;
+}
+
+// Calls fn every second until done(result) holds; NOT_FOUND counts as "not yet".
+async function poll(fn, done) {
+  for (let i = 0; i < 60; i++) {
+    try {
+      const v = await fn();
+      if (done(v)) return v;
+    } catch (err) {
+      if (err.code !== 'NOT_FOUND') throw err;
+    }
+    await sleep(1000);
+  }
+  throw new Error('gave up waiting after 60s');
+}
+
+async function waitForOrder(orderId, token) {
+  const order = await poll(
+    async () => (await gql('query($id: ID!) { order(id: $id) { status } }', { id: orderId }, token)).order,
+    (o) => o && o.status !== 'PENDING');
+  log('Order status: ' + order.status);
+}
+
+document.getElementById('form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  logEl.textContent = '';
+  const f = new FormData(event.target);
+  try {
+    const token = (await gql('mutation($e: String!, $p: String!) { login(email: $e, password: $p) { accessToken } }',
+      { e: f.get('email'), p: f.get('password') })).login.accessToken;
+    log('Logged in.');
+
+    const order = (await gql('mutation($in: CreateOrderInput!) { createOrder(input: $in) { id totalAmountCents } }', {
+      in: {
+        items: [{ productId: f.get('productId'), quantity: Number(f.get('quantity')) }],
+        shippingAddress: f.get('address'), billingAddress: f.get('address'), paymentMethod: 'razorpay',
+      },
+    }, token)).createOrder;
+    log('Order ' + order.id + ' created, waiting for the Razorpay order...');
+
+    const payment = await poll(
+      async () => (await gql(
+        'query($id: ID!) { paymentForOrder(orderId: $id) { status provider failureReason checkout { keyId orderId amountCents currency } } }',
+        { id: order.id }, token)).paymentForOrder,
+      (p) => p && (p.checkout || p.status !== 'PENDING'));
+    if (!payment.checkout) {
+      log('No checkout to open: payment is ' + payment.status + ' with provider ' + payment.provider +
+        (payment.failureReason ? ' (' + payment.failureReason + ')' : '') +
+        '. Razorpay needs PAYMENT_PROVIDER=razorpay on payment and RAZORPAY_KEY_ID on the gateway.');
+      return;
+    }
+
+    const c = payment.checkout;
+    log('Opening Razorpay Checkout for ' + c.orderId + ' (' + c.amountCents + ' ' + c.currency + ' minor units).');
+    const rzp = new Razorpay({
+      key: c.keyId,
+      amount: c.amountCents,
+      currency: c.currency,
+      order_id: c.orderId,
+      name: 'E-commerce dev checkout',
+      description: 'Order ' + order.id,
+      // A failed attempt fails the order, so a retry in the same window would only be refunded.
+      retry: { enabled: false },
+      handler: async (resp) => {
+        try {
+          log('Checkout succeeded, confirming ' + resp.razorpay_payment_id + '...');
+          const confirmed = (await gql(
+            'mutation($o: ID!, $p: String!, $s: String!) { confirmPayment(orderId: $o, razorpayPaymentId: $p, razorpaySignature: $s) { status providerRef } }',
+            { o: order.id, p: resp.razorpay_payment_id, s: resp.razorpay_signature }, token)).confirmPayment;
+          log('Payment ' + confirmed.status + ' (' + confirmed.providerRef + ').');
+          await waitForOrder(order.id, token);
+        } catch (err) {
+          log('Error: ' + err.message);
+        }
+      },
+      modal: { ondismiss: () => log('Checkout closed. An unpaid order is cancelled after PAYMENT_TIMEOUT.') },
+    });
+    rzp.on('payment.failed', async (resp) => {
+      log('Payment failed: ' + resp.error.description + '. The payment.failed webhook cancels the order ' +
+        '(without a webhook it is cancelled after PAYMENT_TIMEOUT).');
+      try { await waitForOrder(order.id, token); } catch (err) { log('Error: ' + err.message); }
+    });
+    rzp.open();
+  } catch (err) {
+    log('Error: ' + err.message);
+  }
+});
+</script>
+</body>
+</html>

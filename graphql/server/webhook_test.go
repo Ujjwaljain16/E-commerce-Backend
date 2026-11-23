@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -131,6 +132,29 @@ func TestRazorpayWebhookIsNotRateLimited(t *testing.T) {
 	}
 	if codes[1] != http.StatusTooManyRequests {
 		t.Fatalf("graphql status codes = %v, want the second to be 429", codes)
+	}
+}
+
+func TestDevCheckoutPageOnlyWithPlayground(t *testing.T) {
+	get := func(h http.Handler) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/checkout", nil))
+		return rec
+	}
+
+	if rec := get(newWebhookRouter(t, map[string]string{}, &webhookPayments{})); rec.Code != http.StatusNotFound {
+		t.Fatalf("without playground: status %d", rec.Code)
+	}
+
+	rec := get(newWebhookRouter(t, map[string]string{"PLAYGROUND_ENABLED": "true"}, &webhookPayments{}))
+	body, _ := io.ReadAll(rec.Body)
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("status %d, content type %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	for _, want := range []string{"https://checkout.razorpay.com/v1/checkout.js", "confirmPayment", "paymentForOrder"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("page does not mention %s", want)
+		}
 	}
 }
 

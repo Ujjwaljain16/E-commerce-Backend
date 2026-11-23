@@ -1,6 +1,7 @@
 package server
 
 import (
+	_ "embed"
 	"errors"
 	"io"
 	"net/http"
@@ -52,5 +53,18 @@ func RazorpayWebhook(payments paymentpb.PaymentServiceClient, log *logger.Logger
 			})
 			writeStatus(w, http.StatusServiceUnavailable, "try again later")
 		}
+	})
+}
+
+//go:embed checkout.html
+var checkoutPage []byte
+
+// DevCheckoutPage serves a page for trying Razorpay Checkout against this gateway with test keys.
+// It is only routed when the playground is enabled.
+func DevCheckoutPage() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(checkoutPage)
 	})
 }
