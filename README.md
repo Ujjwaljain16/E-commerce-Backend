@@ -1,357 +1,112 @@
 # E-Commerce Microservices Platform
 
-A production-grade, distributed e-commerce backend system built with Go, gRPC, Kafka, GraphQL, and Kubernetes.
+A distributed e-commerce backend in Go: six services talking gRPC, an event-driven checkout saga over Kafka, a GraphQL gateway, and the Docker/Kubernetes/CI setup to run it.
 
-## 🚀 Overview
+Design choices and their trade-offs are in [decisions.md](decisions.md).
 
-This project demonstrates a complete microservices architecture for an e-commerce platform, featuring:
-
-- **Microservices Architecture**: 5 independently deployable services
-- **Event-Driven Design**: Asynchronous communication via Kafka
-- **API Gateway**: Unified GraphQL interface
-- **Authentication**: JWT-based auth with role-based access control
-- **Caching**: Redis for performance optimization
-- **Observability**: Prometheus + Grafana monitoring, ELK logging
-- **Container Orchestration**: Docker Compose + Kubernetes
-- **CI/CD**: Automated testing and deployment pipelines
-
-## 📐 Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    GraphQL Gateway                          │
-│              (Unified API + Authentication)                 │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ gRPC
-        ┌──────────┼──────────┬──────────┬──────────┐
-        │          │          │          │          │
-   ┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼─────┐ ┌──▼─────────┐
-   │Account │ │Catalog │ │ Order  │ │Payment  │ │Notification│
-   │Service │ │Service │ │Service │ │Service  │ │  Service   │
-   └────┬───┘ └───┬────┘ └───┬────┘ └───┬─────┘ └──┬─────────┘
-        │         │          │          │          │
-        └─────────┴──────────┴──────────┴──────────┘
-                          │
-                     Kafka Event Bus
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-   PostgreSQL          Redis          Elasticsearch
+                       clients
+                          │  GraphQL (JWT, rate limit, complexity limit)
+                  ┌───────▼────────┐
+                  │ GraphQL gateway│
+                  └───────┬────────┘
+                          │ gRPC
+   ┌──────────┬───────────┼───────────┬─────────────┐
+┌──▼────┐ ┌───▼────┐ ┌────▼───┐ ┌─────▼───┐ ┌───────▼──────┐
+│Account│ │Catalog │◀┤ Order  │ │ Payment │ │ Notification │
+└──┬────┘ └─┬───┬──┘ └──┬─────┘ └──┬──────┘ └──────┬───────┘
+   │        │   │ Redis │  outbox  │ outbox        │ SMTP
+   │        │   │       │          │               │
+   └────────┴───┼───────┴──────────┴───────────────┘
+           PostgreSQL         Kafka (order.*, payment.* events)
 ```
 
-## 🎯 Services
+**Checkout:** `createOrder` reserves stock and prices the items in Catalog (client prices are ignored), stores the order as `PENDING` and emits `order.created`. Payment charges it and emits `payment.succeeded` / `payment.failed`; Order then confirms or cancels. A cancellation (customer, admin or failed payment) emits `order.cancelled`, which makes Catalog put the stock back and Payment refund or void the charge. Notification emails the customer at each step. Events go through a transactional outbox and every consumer is idempotent.
 
-### 1. Account Service
-- User registration and authentication
-- JWT token generation and validation
-- Role-based access control (USER/ADMIN)
-- Password hashing with bcrypt
+| Service | gRPC | Metrics / health | Owns |
+|---|---|---|---|
+| account | 50051 | 9090 | users, bcrypt passwords, JWT access/refresh tokens, USER/ADMIN roles |
+| catalog | 50052 | 9091 | products, stock reservations, full-text search, Redis cache |
+| order | 50053 | 9092 | orders, status transitions, order events |
+| payment | 50054 | 9093 | payments (mock provider), refunds, idempotency |
+| notification | 50055 | 9094 | email templates, SMTP delivery, notification history |
+| graphql | HTTP 8000 | `/metrics`, `/healthz`, `/readyz` | public API, auth, ownership checks |
 
-**Tech Stack**: Go, gRPC, PostgreSQL, JWT
+## Run it
 
-### 2. Catalog Service
-- Product CRUD operations
-- Full-text search with Elasticsearch
-- Redis caching for performance
-- Inventory management
+Requirements: Go 1.24+, Docker.
 
-**Tech Stack**: Go, gRPC, Elasticsearch, Redis
-
-### 3. Order Service
-- Order creation and management
-- Order status tracking
-- Integration with Account & Catalog services
-- Event publishing to Kafka
-
-**Tech Stack**: Go, gRPC, PostgreSQL, Kafka
-
-### 4. Payment Service
-- Payment processing (Stripe mock integration)
-- Idempotency key support
-- Transaction management
-- Event-driven status updates
-
-**Tech Stack**: Go, gRPC, PostgreSQL, Kafka, Redis
-
-### 5. Notification Service
-- Email notifications (SMTP mock)
-- Event-driven notifications
-- Template-based messaging
-- Notification history
-
-**Tech Stack**: Go, Kafka
-
-### 6. GraphQL Gateway
-- Unified API for all services
-- Authentication middleware
-- Rate limiting
-- Query complexity analysis
-
-**Tech Stack**: Go, gqlgen, gRPC clients
-
-## 🛠️ Tech Stack
-
-**Languages & Frameworks**:
-- Go 1.21+
-- gRPC & Protocol Buffers
-- GraphQL (gqlgen)
-
-**Databases**:
-- PostgreSQL 15
-- Elasticsearch 8
-- Redis 7
-
-**Message Queue**:
-- Apache Kafka
-
-**Observability**:
-- Prometheus (metrics)
-- Grafana (dashboards)
-- ELK Stack (logging)
-
-**DevOps**:
-- Docker & Docker Compose
-- Kubernetes
-- GitHub Actions (CI/CD)
-
-**Testing**:
-- Go testing framework
-- Testcontainers (integration tests)
-- k6 (load testing)
-
-## 🚦 Getting Started
-
-### Prerequisites
-
-- Go 1.21 or higher
-- Docker & Docker Compose
-- Protocol Buffers compiler (protoc)
-- kubectl (for Kubernetes deployment)
-
-### Installation
-
-1. **Clone the repository**
 ```bash
-git clone https://github.com/Ujjwaljain16/E-commerce-Backend.git
-cd E-commerce-Backend
+docker compose up -d --build                      # whole stack
+docker compose --profile monitoring up -d         # + Prometheus :9190, Grafana :3000
 ```
 
-2. **Install dependencies**
-```bash
-go mod download
-```
+- GraphQL playground: http://localhost:8000/playground
+- Emails sent by the notification service: http://localhost:8025 (Mailpit)
+- Dev admin: `admin@example.com` / `admin-password-123` (set by `ADMIN_EMAIL` / `ADMIN_PASSWORD`)
 
-3. **Generate Protocol Buffer code**
-```bash
-make proto-gen
-```
+Each service applies its own migrations on startup. Compose secrets are for local use only.
 
-4. **Start infrastructure services**
-```bash
-docker-compose up -d
-```
+### Example
 
-5. **Run database migrations**
-```bash
-make migrate-up
-```
-
-6. **Start all services**
-```bash
-# Terminal 1: Account Service
-cd account/cmd/account && go run main.go
-
-# Terminal 2: Catalog Service
-cd catalog/cmd/catalog && go run main.go
-
-# Terminal 3: Order Service
-cd order/cmd/order && go run main.go
-
-# Terminal 4: Payment Service
-cd payment/cmd/payment && go run main.go
-
-# Terminal 5: Notification Service
-cd notification/cmd/notification && go run main.go
-
-# Terminal 6: GraphQL Gateway
-cd graphql && go run main.go
-```
-
-7. **Access the GraphQL Playground**
-```
-http://localhost:8000/playground
-```
-
-## 📊 Example GraphQL Queries
-
-### Register User
 ```graphql
-mutation {
-  register(input: {
-    name: "John Doe"
-    email: "john@example.com"
-    password: "SecurePass123!"
-  }) {
-    account {
-      id
-      name
-      email
-    }
-    accessToken
-  }
-}
+mutation { register(input: {email: "jo@example.com", password: "password123", name: "Jo"}) { accessToken user { id } } }
 ```
 
-### Create Product
 ```graphql
-mutation {
-  createProduct(input: {
-    name: "Laptop"
-    description: "High-performance laptop"
-    price: 999.99
-  }) {
-    id
-    name
-    price
-  }
-}
+# Authorization: Bearer <admin token>
+mutation { createProduct(input: {name: "Grinder", price: 49.5, sku: "GR-1", stock: 10}) { id } }
 ```
 
-### Create Order
 ```graphql
+# Authorization: Bearer <user token>
 mutation {
   createOrder(input: {
-    accountId: "acc_123"
-    products: [
-      { id: "prod_456", quantity: 2 }
-    ]
-  }) {
-    id
-    totalPrice
-    status
-  }
+    items: [{productId: "<id>", quantity: 2}]
+    shippingAddress: "221B Baker Street", billingAddress: "221B Baker Street", paymentMethod: "card"
+  }) { id status totalAmount }
 }
 ```
 
-## 🧪 Testing
+Poll `order(id: "...") { status }` to watch it go from `PENDING` to `CONFIRMED`. Use `paymentMethod: "card_declined"` to see the failure path. See [graphql/README.md](graphql/README.md) for the full API.
 
-### Run unit tests
+## Test
+
 ```bash
-make test
+make test               # unit tests, no Docker
+make integration-test   # repository tests against throwaway Postgres containers
+make e2e                # full checkout saga against the running compose stack
+make lint               # gofmt, vet, staticcheck
 ```
 
-### Run integration tests
+## Deploy
+
 ```bash
-make integration-test
+kubectl -n ecommerce create secret generic ecommerce-secrets --from-env-file=secrets.env   # see k8s/infrastructure/secrets.example.yaml
+kubectl apply -k k8s
 ```
 
-### Run with coverage
-```bash
-make coverage
-```
+The manifests include probes, resource limits, restricted pod security, HPA/PDB for the gateway, catalog and order, an Ingress for the gateway and NetworkPolicies that keep backend services internal. The bundled Postgres, Kafka and Redis are single-node and meant for dev/staging.
 
-### Load testing
-```bash
-make load-test
-```
+CI (`.github/workflows/ci.yml`) runs lint, protobuf drift checks, race-enabled unit tests, integration tests, govulncheck, image builds with a Trivy scan, and manifest rendering. Images are pushed to GHCR from `main`.
 
-## 📈 Monitoring
-
-### Prometheus Metrics
-- **URL**: http://localhost:9090
-- Service-level metrics (RED: Rate, Errors, Duration)
-- Business metrics (orders/sec, revenue)
-
-### Grafana Dashboards
-- **URL**: http://localhost:3000
-- **Credentials**: admin/admin
-- Pre-configured dashboards for all services
-
-### Logs (Kibana)
-- **URL**: http://localhost:5601
-- Centralized logging with correlation IDs
-
-## 🚀 Deployment
-
-### Docker Compose (Local Development)
-```bash
-docker-compose up --build
-```
-
-### Kubernetes (Production)
-```bash
-# Deploy to Kubernetes
-kubectl apply -f k8s/
-
-# Check deployment status
-kubectl get pods -n ecommerce
-
-# Access services
-kubectl port-forward svc/graphql-gateway 8000:8080
-```
-
-## 📂 Project Structure
+## Layout
 
 ```
-ecommerce-microservices/
-├── account/              # Account service
-│   ├── pb/              # Generated protobuf code
-│   ├── cmd/account/     # Service entrypoint
-│   ├── migrations/      # Database migrations
-│   └── *.go             # Service implementation
-├── catalog/             # Catalog service
-├── order/               # Order service
-├── payment/             # Payment service
-├── notification/        # Notification service
-├── graphql/             # GraphQL gateway
-├── pkg/                 # Shared packages
-│   ├── auth/           # JWT utilities
-│   ├── kafka/          # Kafka producer/consumer
-│   ├── cache/          # Redis client
-│   ├── logger/         # Structured logging
-│   └── metrics/        # Prometheus metrics
-├── k8s/                 # Kubernetes manifests
-├── monitoring/          # Prometheus, Grafana configs
-├── tests/               # Integration & load tests
-├── docker-compose.yaml
-└── Makefile
+account/ catalog/ order/ payment/ notification/   service code, proto, migrations, Dockerfile
+graphql/                 GraphQL gateway (gqlgen)
+pkg/                     auth, cache, database, events, kafka, logger, metrics, outbox, server
+monitoring/              Prometheus config + alerts, Grafana dashboard
+k8s/                     kustomize manifests
+tests/e2e/               end-to-end tests (build tag e2e)
 ```
 
-## 🤝 Contributing
+Regenerate protobuf code with `make proto-gen` (uses buf; needs `protoc-gen-go` and `protoc-gen-go-grpc`).
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+## License
 
-## 📝 License
+MIT, see [LICENSE](LICENSE).
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👨‍💻 Author
-
-**Ujjwal Jain**
-- GitHub: [@Ujjwaljain16](https://github.com/Ujjwaljain16)
-- LinkedIn: [Ujjwal Jain](https://linkedin.com/in/ujjwaljain16)
-
-## 🙏 Acknowledgments
-
-- Inspired by microservices architectures at Amazon, Netflix, and Uber
-- Built as a learning project to demonstrate production-grade backend engineering
-
-## 📊 Performance Benchmarks
-
-- **Order Creation**: 800+ req/sec
-- **Product Search**: 1200+ req/sec
-- **Authentication**: 500+ req/sec
-- **P95 Latency**: < 100ms for all endpoints
-
-## 🔒 Security
-
-- JWT-based authentication
-- Password hashing with bcrypt
-- Input validation on all endpoints
-- SQL injection prevention
-- Rate limiting
-- CORS configuration
-
----
-
-**⭐ If you find this project useful, please consider giving it a star!**
+**Author:** Ujjwal Jain ([@Ujjwaljain16](https://github.com/Ujjwaljain16))
