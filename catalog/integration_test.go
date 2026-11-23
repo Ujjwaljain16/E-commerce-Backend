@@ -485,3 +485,65 @@ func TestIntegration_SearchProducts(t *testing.T) {
 		t.Errorf("Expected 'Wireless Headphones', got %s", searchResp.Products[0].Name)
 	}
 }
+
+func TestIntegration_ReservationExpiryAndLateCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+	service, cleanup := setupIntegrationTest(t)
+	defer cleanup()
+	ctx := context.Background()
+	repo := service.repo.(*postgresRepository)
+
+	created, err := service.CreateProduct(ctx, &pb.CreateProductRequest{Name: "Kettle", Price: 30, Sku: "EXP-1", Stock: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	productID := created.Product.Id
+	stock := func() int32 {
+		p, err := service.GetProduct(ctx, &pb.GetProductRequest{Id: productID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Product.Stock
+	}
+
+	orphan, lateOrder := "6b1f7d0e-0000-4000-8000-000000000001", "6b1f7d0e-0000-4000-8000-000000000002"
+	for _, id := range []string{orphan, lateOrder} {
+		if _, err := service.ReserveStock(ctx, &pb.ReserveStockRequest{OrderId: id, Items: []*pb.StockItem{{ProductId: productID, Quantity: 2}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := stock(); got != 1 {
+		t.Fatalf("after two reservations want stock 1, got %d", got)
+	}
+
+	if _, err := repo.db.ExecContext(ctx, `UPDATE stock_reservations SET created_at = NOW() - INTERVAL '1 hour'`); err != nil {
+		t.Fatal(err)
+	}
+	if n := NewReservationSweeper(repo, logger.New("test"), 15*time.Minute).SweepOnce(ctx); n != 2 {
+		t.Fatalf("expected 2 reservations expired, got %d", n)
+	}
+	if got := stock(); got != 5 {
+		t.Fatalf("expired reservations must return stock, got %d", got)
+	}
+
+	// The order for lateOrder did exist; its event just arrived late. It should win the stock back.
+	if _, err := repo.CommitReservation(ctx, lateOrder); err != nil {
+		t.Fatal(err)
+	}
+	if got := stock(); got != 3 {
+		t.Fatalf("late commit should re-reserve, want 3, got %d", got)
+	}
+	// Cancelling it afterwards releases it like any committed reservation.
+	if ids, err := repo.ReleaseStock(ctx, lateOrder); err != nil || len(ids) != 1 {
+		t.Fatalf("release committed reservation = %v, %v", ids, err)
+	}
+	if got := stock(); got != 5 {
+		t.Fatalf("want stock 5 after release, got %d", got)
+	}
+	// A second sweep finds nothing.
+	if n := NewReservationSweeper(repo, logger.New("test"), 15*time.Minute).SweepOnce(ctx); n != 0 {
+		t.Fatalf("second sweep released %d", n)
+	}
+}

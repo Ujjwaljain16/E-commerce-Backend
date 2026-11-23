@@ -80,6 +80,18 @@ func (r *cachedRepository) ReleaseStock(ctx context.Context, orderID string) ([]
 	return ids, err
 }
 
+func (r *cachedRepository) CommitReservation(ctx context.Context, orderID string) ([]string, error) {
+	ids, err := r.Repository.CommitReservation(ctx, orderID)
+	r.invalidate(ctx, ids...)
+	return ids, err
+}
+
+func (r *cachedRepository) ExpireReservation(ctx context.Context, orderID string) ([]string, error) {
+	ids, err := r.Repository.ExpireReservation(ctx, orderID)
+	r.invalidate(ctx, ids...)
+	return ids, err
+}
+
 func (r *cachedRepository) invalidate(ctx context.Context, ids ...string) {
 	if len(ids) == 0 {
 		return

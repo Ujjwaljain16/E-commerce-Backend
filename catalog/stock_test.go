@@ -138,7 +138,7 @@ func TestRepositoryReleaseStock_IsIdempotent(t *testing.T) {
 	repo := NewPostgresRepository(db, logger.New("test"))
 
 	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE stock_reservations SET status = 'RELEASED'`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`UPDATE stock_reservations SET status = \$2`).WithArgs(testOrderID, "RELEASED", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	ids, err := repo.ReleaseStock(context.Background(), testOrderID)
@@ -207,9 +207,9 @@ func TestCachedRepository_ReadThroughAndInvalidate(t *testing.T) {
 	}
 }
 
-func TestOrderCancelledHandler_ReleasesAndSkipsGarbage(t *testing.T) {
+func TestOrderEventHandler_CancelReleasesAndSkipsGarbage(t *testing.T) {
 	var released []string
-	h := NewOrderCancelledHandler(&MockRepository{ReleaseFunc: func(_ context.Context, id string) ([]string, error) {
+	h := NewOrderEventHandler(&MockRepository{ReleaseFunc: func(_ context.Context, id string) ([]string, error) {
 		released = append(released, id)
 		return []string{productA}, nil
 	}}, logger.New("test"))

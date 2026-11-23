@@ -39,6 +39,10 @@ type Repository interface {
 	ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
 	// ReleaseStock returns the IDs of products whose stock was put back (empty if nothing was reserved).
 	ReleaseStock(ctx context.Context, orderID string) ([]string, error)
+	// CommitReservation marks a reservation as belonging to a created order (restoring it if it had expired).
+	CommitReservation(ctx context.Context, orderID string) ([]string, error)
+	ExpiredReservations(ctx context.Context, ttl time.Duration, limit int) ([]string, error)
+	ExpireReservation(ctx context.Context, orderID string) ([]string, error)
 	Close() error
 }
 

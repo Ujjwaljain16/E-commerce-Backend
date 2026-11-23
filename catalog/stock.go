@@ -105,36 +105,7 @@ func (r *postgresRepository) ReserveStock(ctx context.Context, orderID string, i
 // ReleaseStock puts reserved stock back. It reports false when nothing was reserved, which makes
 // repeated releases (event redelivery, retries) harmless.
 func (r *postgresRepository) ReleaseStock(ctx context.Context, orderID string) ([]string, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("begin release: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
-
-	res, err := tx.ExecContext(ctx,
-		`UPDATE stock_reservations SET status = 'RELEASED', updated_at = NOW() WHERE order_id = $1 AND status = 'RESERVED'`, orderID)
-	if err != nil {
-		return nil, fmt.Errorf("mark released: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return nil, tx.Commit()
-	}
-
-	items, err := reservationItems(ctx, tx, orderID)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(items))
-	for _, it := range items {
-		if _, err := tx.ExecContext(ctx, `UPDATE products SET stock = stock + $2 WHERE id = $1`, it.ProductID, it.Quantity); err != nil {
-			return nil, fmt.Errorf("restock %s: %w", it.ProductID, err)
-		}
-		ids = append(ids, it.ProductID)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit release: %w", err)
-	}
-	return ids, nil
+	return r.returnStock(ctx, orderID, "RELEASED", "RESERVED", "COMMITTED")
 }
 
 func reservationItems(ctx context.Context, tx *sql.Tx, orderID string) ([]ReservedItem, error) {

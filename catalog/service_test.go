@@ -23,7 +23,31 @@ type MockRepository struct {
 	SearchFunc   func(ctx context.Context, query string, page, pageSize int32) ([]*Product, int32, error)
 	ReserveFunc  func(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error)
 	ReleaseFunc  func(ctx context.Context, orderID string) ([]string, error)
+	CommitFunc   func(ctx context.Context, orderID string) ([]string, error)
+	ExpiredFunc  func(ctx context.Context, ttl time.Duration, limit int) ([]string, error)
+	ExpireFunc   func(ctx context.Context, orderID string) ([]string, error)
 	CloseFunc    func() error
+}
+
+func (m *MockRepository) CommitReservation(ctx context.Context, orderID string) ([]string, error) {
+	if m.CommitFunc != nil {
+		return m.CommitFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ExpiredReservations(ctx context.Context, ttl time.Duration, limit int) ([]string, error) {
+	if m.ExpiredFunc != nil {
+		return m.ExpiredFunc(ctx, ttl, limit)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockRepository) ExpireReservation(ctx context.Context, orderID string) ([]string, error) {
+	if m.ExpireFunc != nil {
+		return m.ExpireFunc(ctx, orderID)
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (m *MockRepository) ReserveStock(ctx context.Context, orderID string, items []StockItem) ([]ReservedItem, error) {
