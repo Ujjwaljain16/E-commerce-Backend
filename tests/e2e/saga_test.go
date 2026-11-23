@@ -85,7 +85,7 @@ func TestCheckoutSaga(t *testing.T) {
 
 	prod, err := c.catalog.CreateProduct(ctx, &catalogpb.CreateProductRequest{
 		Name: "E2E Espresso Machine", Description: "Dual boiler espresso machine for testing",
-		Price: 19.99, Sku: fmt.Sprintf("E2E-%d", suffix), Stock: 5, Category: "kitchen",
+		PriceCents: 1999, Sku: fmt.Sprintf("E2E-%d", suffix), Stock: 5, Category: "kitchen",
 	})
 	if err != nil {
 		t.Fatalf("create product: %v", err)
@@ -119,7 +119,7 @@ func TestCheckoutSaga(t *testing.T) {
 	placeOrder := func(qty int32, method string) *orderpb.Order {
 		resp, err := c.order.CreateOrder(ctx, &orderpb.CreateOrderRequest{
 			UserId:          userID,
-			Items:           []*orderpb.OrderItemInput{{ProductId: productID, Quantity: qty, Price: 0.01}},
+			Items:           []*orderpb.OrderItemInput{{ProductId: productID, Quantity: qty, PriceCents: 1}},
 			ShippingAddress: "1 Test Street",
 			PaymentMethod:   method,
 		})
@@ -134,8 +134,8 @@ func TestCheckoutSaga(t *testing.T) {
 		if o.Status != orderpb.OrderStatus_PENDING {
 			t.Fatalf("new order should be PENDING, got %v", o.Status)
 		}
-		if o.TotalAmount != 39.98 || o.Items[0].Price != 19.99 {
-			t.Fatalf("order must use catalog prices, got total=%v price=%v", o.TotalAmount, o.Items[0].Price)
+		if o.TotalAmountCents != 3998 || o.Items[0].PriceCents != 1999 || o.Items[0].SubtotalCents != 3998 {
+			t.Fatalf("order must use catalog prices, got total=%d price=%d", o.TotalAmountCents, o.Items[0].PriceCents)
 		}
 		if got := stock(); got != 3 {
 			t.Fatalf("stock should be reserved: want 3, got %d", got)
