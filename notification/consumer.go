@@ -32,12 +32,12 @@ func decode(msg kafkago.Message) (orderEvent, error) {
 		var e events.OrderCreated
 		err = json.Unmarshal(msg.Value, &e)
 		ev = orderEvent{e.EventID, e.UserID, messageData{
-			OrderID: e.OrderID, Total: formatTotal(e.TotalAmount, e.Currency), Items: e.Items,
+			OrderID: e.OrderID, Total: formatTotal(e.TotalAmountCents, e.Currency), Items: e.Items,
 		}}
 	case events.TopicOrderConfirmed:
 		var e events.OrderConfirmed
 		err = json.Unmarshal(msg.Value, &e)
-		ev = orderEvent{e.EventID, e.UserID, messageData{OrderID: e.OrderID, Total: formatTotal(e.TotalAmount, "")}}
+		ev = orderEvent{e.EventID, e.UserID, messageData{OrderID: e.OrderID, Total: formatTotal(e.TotalAmountCents, "")}}
 	case events.TopicOrderCancelled:
 		var e events.OrderCancelled
 		err = json.Unmarshal(msg.Value, &e)

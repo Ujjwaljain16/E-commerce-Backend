@@ -75,12 +75,16 @@ func render(topic string, data messageData) (subject, body string, err error) {
 	return sb.String(), bb.String(), nil
 }
 
-func formatTotal(amount float64, currency string) string {
-	if amount <= 0 {
+// formatTotal renders an amount in cents for humans, e.g. 3998 USD -> "$39.98". Events without a
+// currency are in USD. Integer math only, so the email always matches what was charged.
+func formatTotal(cents int64, currency string) string {
+	if cents <= 0 {
 		return ""
 	}
-	if currency == "" {
-		return fmt.Sprintf("%.2f", amount)
+	amount := fmt.Sprintf("%d.%02d", cents/100, cents%100)
+	currency = strings.ToUpper(currency)
+	if currency == "" || currency == "USD" {
+		return "$" + amount
 	}
-	return fmt.Sprintf("%.2f %s", amount, strings.ToUpper(currency))
+	return amount + " " + currency
 }

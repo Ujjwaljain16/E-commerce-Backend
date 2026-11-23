@@ -104,8 +104,8 @@ func message(t *testing.T, topic string, v interface{}) kafkago.Message {
 
 func createdMessage(t *testing.T) (kafkago.Message, string) {
 	e := events.OrderCreated{
-		Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmount: 59.98, Currency: "USD",
-		Items: []events.OrderItem{{ProductName: "Mug", Quantity: 2, Price: 29.99}},
+		Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmountCents: 5998, Currency: "USD",
+		Items: []events.OrderItem{{ProductName: "Mug", Quantity: 2, PriceCents: 2999}},
 	}
 	return message(t, events.TopicOrderCreated, e), e.EventID
 }
@@ -117,10 +117,10 @@ func TestHandleOrderEventsSendEmail(t *testing.T) {
 		subject string
 		body    string
 	}{
-		{events.TopicOrderCreated, events.OrderCreated{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmount: 59.98, Currency: "USD"},
-			"We received your order " + testOrderID, "59.98 USD"},
-		{events.TopicOrderConfirmed, events.OrderConfirmed{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmount: 59.98},
-			"Your order " + testOrderID + " is confirmed", "(59.98)"},
+		{events.TopicOrderCreated, events.OrderCreated{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmountCents: 5998, Currency: "USD"},
+			"We received your order " + testOrderID, "$59.98"},
+		{events.TopicOrderConfirmed, events.OrderConfirmed{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, TotalAmountCents: 5998},
+			"Your order " + testOrderID + " is confirmed", "($59.98)"},
 		{events.TopicOrderCancelled, events.OrderCancelled{Meta: events.NewMeta(), OrderID: testOrderID, UserID: testUserID, Reason: "payment declined"},
 			"Your order " + testOrderID + " was cancelled", "(payment declined)"},
 	}

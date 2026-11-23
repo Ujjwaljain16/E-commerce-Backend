@@ -12,22 +12,22 @@ func TestRenderOrderCreated(t *testing.T) {
 	subject, body, err := render(events.TopicOrderCreated, messageData{
 		Name:    "Asha",
 		OrderID: "order-42",
-		Total:   formatTotal(120.5, "usd"),
+		Total:   formatTotal(12050, "usd"),
 		Items:   []events.OrderItem{{ProductName: "Keyboard", Quantity: 2}},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "We received your order order-42", subject)
 	assert.Contains(t, body, "Hi Asha,")
-	assert.Contains(t, body, "order order-42 for 120.50 USD")
+	assert.Contains(t, body, "order order-42 for $120.50")
 	assert.Contains(t, body, "2 x Keyboard")
 }
 
 func TestRenderOrderConfirmed(t *testing.T) {
-	subject, body, err := render(events.TopicOrderConfirmed, messageData{OrderID: "order-42", Total: formatTotal(99, "")})
+	subject, body, err := render(events.TopicOrderConfirmed, messageData{OrderID: "order-42", Total: formatTotal(9900, "")})
 	require.NoError(t, err)
 	assert.Equal(t, "Your order order-42 is confirmed", subject)
 	assert.Contains(t, body, "Hi there,", "falls back when the name is unknown")
-	assert.Contains(t, body, "order-42 (99.00) is confirmed")
+	assert.Contains(t, body, "order-42 ($99.00) is confirmed")
 }
 
 func TestRenderOrderCancelled(t *testing.T) {
@@ -48,6 +48,10 @@ func TestRenderUnknownTopic(t *testing.T) {
 
 func TestFormatTotal(t *testing.T) {
 	assert.Equal(t, "", formatTotal(0, "USD"))
-	assert.Equal(t, "10.00", formatTotal(10, ""))
-	assert.Equal(t, "10.50 EUR", formatTotal(10.5, "eur"))
+	assert.Equal(t, "", formatTotal(-5, "USD"))
+	assert.Equal(t, "$10.00", formatTotal(1000, ""))
+	assert.Equal(t, "$0.07", formatTotal(7, "usd"))
+	assert.Equal(t, "$39.98", formatTotal(3998, "USD"))
+	assert.Equal(t, "$1234567.89", formatTotal(123456789, "USD"))
+	assert.Equal(t, "10.50 EUR", formatTotal(1050, "eur"))
 }
