@@ -31,7 +31,7 @@ jobs:
       - name: go vet
         run: go vet ./...
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
       - name: protobuf code is up to date
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
@@ -72,7 +72,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
   images:
     name: Build images
