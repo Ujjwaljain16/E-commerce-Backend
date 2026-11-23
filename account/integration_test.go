@@ -20,6 +20,9 @@ import (
 // setupIntegrationTest creates a PostgreSQL container and returns a configured service
 func setupIntegrationTest(t *testing.T) (*Service, func()) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	ctx := context.Background()
 
 	// Create PostgreSQL container

@@ -15,6 +15,9 @@ import (
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, func()) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	ctx := context.Background()
 
 	postgresContainer, err := postgres.Run(ctx,
