@@ -176,3 +176,36 @@ func TestGatewayCheckout(t *testing.T) {
 		})
 	})
 }
+
+func TestGatewaySessions(t *testing.T) {
+	user := register(t, fmt.Sprintf("sessions-%d@example.com", time.Now().UnixNano()))
+	const refresh = `mutation($t: String!) { refreshToken(refreshToken: $t) { accessToken refreshToken } }`
+
+	var rotated authPayload
+	field(t, gql(t, "", refresh, map[string]interface{}{"t": user.RefreshToken}), "refreshToken", &rotated)
+	if rotated.RefreshToken == user.RefreshToken {
+		t.Fatal("refresh should rotate the refresh token")
+	}
+
+	t.Run("reusing a rotated refresh token signs out every session", func(t *testing.T) {
+		if c := gql(t, "", refresh, map[string]interface{}{"t": user.RefreshToken}).code(); c != "UNAUTHENTICATED" {
+			t.Fatalf("reuse: want UNAUTHENTICATED, got %q", c)
+		}
+		if c := gql(t, "", refresh, map[string]interface{}{"t": rotated.RefreshToken}).code(); c != "UNAUTHENTICATED" {
+			t.Fatalf("after reuse the newest token must be revoked, got %q", c)
+		}
+	})
+
+	t.Run("logout revokes the refresh token", func(t *testing.T) {
+		var a authPayload
+		field(t, gql(t, "", `mutation { login(email: "admin@example.com", password: "admin-password-123") { accessToken refreshToken } }`, nil), "login", &a)
+		var ok bool
+		field(t, gql(t, a.AccessToken, `mutation($t: String!) { logout(refreshToken: $t) }`, map[string]interface{}{"t": a.RefreshToken}), "logout", &ok)
+		if !ok {
+			t.Fatal("logout returned false")
+		}
+		if c := gql(t, "", refresh, map[string]interface{}{"t": a.RefreshToken}).code(); c != "UNAUTHENTICATED" {
+			t.Fatalf("refresh after logout: want UNAUTHENTICATED, got %q", c)
+		}
+	})
+}
