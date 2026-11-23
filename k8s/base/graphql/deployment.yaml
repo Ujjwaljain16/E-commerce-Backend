@@ -59,6 +59,13 @@ spec:
                 secretKeyRef:
                   name: ecommerce-secrets
                   key: JWT_SECRET
+            # The public key for Razorpay Checkout; the secret is only given to payment-service.
+            - name: RAZORPAY_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: RAZORPAY_KEY_ID
+                  optional: true
           readinessProbe:
             httpGet:
               path: /readyz
@@ -141,6 +148,13 @@ spec:
         paths:
           - path: /graphql
             pathType: Prefix
+            backend:
+              service:
+                name: graphql-gateway
+                port:
+                  name: http
+          - path: /webhooks/razorpay
+            pathType: Exact
             backend:
               service:
                 name: graphql-gateway

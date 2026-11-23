@@ -2,6 +2,7 @@
 # Monitoring (Prometheus + Grafana): docker compose --profile monitoring up -d
 #
 # Secrets below are for local development only. Production values come from Kubernetes Secrets.
+# Payments use the mock provider unless a gitignored .env says otherwise (see .env.example for Razorpay).
 
 x-service-defaults: &service-defaults
   restart: unless-stopped
@@ -133,6 +134,7 @@ services:
       CATALOG_SERVICE_ADDR: catalog-service:50052
       PORT: 50053
       METRICS_PORT: 9092
+      CURRENCY: ${CURRENCY:-USD}
     ports:
       - "50053:50053"
 
@@ -147,6 +149,11 @@ services:
       KAFKA_BROKERS: kafka:9092
       PORT: 50054
       METRICS_PORT: 9093
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+      PAYMENT_TIMEOUT: ${PAYMENT_TIMEOUT:-30m}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
     ports:
       - "50054:50054"
 
@@ -185,6 +192,8 @@ services:
       PLAYGROUND_ENABLED: "true"
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-50}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-100}
+      # Public key only; the secret stays with the payment service.
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
     ports:
       - "8000:8000"
     depends_on:

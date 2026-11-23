@@ -48,6 +48,31 @@ spec:
                 secretKeyRef:
                   name: ecommerce-secrets
                   key: DATABASE_URL
+            # Unset means the mock provider; see secrets.example.yaml for Razorpay.
+            - name: PAYMENT_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: PAYMENT_PROVIDER
+                  optional: true
+            - name: RAZORPAY_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: RAZORPAY_KEY_ID
+                  optional: true
+            - name: RAZORPAY_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: RAZORPAY_KEY_SECRET
+                  optional: true
+            - name: RAZORPAY_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: RAZORPAY_WEBHOOK_SECRET
+                  optional: true
           readinessProbe:
             grpc:
               port: 50054
