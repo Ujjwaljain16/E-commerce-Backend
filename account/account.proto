@@ -31,6 +31,9 @@ service AccountService {
   
   // RefreshToken generates a new JWT token from a refresh token
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+
+  // Logout revokes a refresh token
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
 }
 
 // User represents a user account
@@ -141,4 +144,14 @@ message RefreshTokenRequest {
 message RefreshTokenResponse {
   string access_token = 1;
   string refresh_token = 2;
+}
+
+// LogoutRequest contains the refresh token to revoke
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+// LogoutResponse confirms the logout
+message LogoutResponse {
+  bool success = 1;
 }
