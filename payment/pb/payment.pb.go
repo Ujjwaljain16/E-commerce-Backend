@@ -85,7 +85,7 @@ type Payment struct {
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrderId        string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	UserId         string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Amount         float64                `protobuf:"fixed64,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	AmountCents    int64                  `protobuf:"varint,4,opt,name=amount_cents,json=amountCents,proto3" json:"amount_cents,omitempty"`
 	Currency       string                 `protobuf:"bytes,5,opt,name=currency,proto3" json:"currency,omitempty"`
 	Status         PaymentStatus          `protobuf:"varint,6,opt,name=status,proto3,enum=payment.PaymentStatus" json:"status,omitempty"`
 	Method         string                 `protobuf:"bytes,7,opt,name=method,proto3" json:"method,omitempty"`
@@ -149,9 +149,9 @@ func (x *Payment) GetUserId() string {
 	return ""
 }
 
-func (x *Payment) GetAmount() float64 {
+func (x *Payment) GetAmountCents() int64 {
 	if x != nil {
-		return x.Amount
+		return x.AmountCents
 	}
 	return 0
 }
@@ -216,7 +216,7 @@ type ProcessPaymentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrderId        string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Amount         float64                `protobuf:"fixed64,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	AmountCents    int64                  `protobuf:"varint,3,opt,name=amount_cents,json=amountCents,proto3" json:"amount_cents,omitempty"`
 	Currency       string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`
 	Method         string                 `protobuf:"bytes,5,opt,name=method,proto3" json:"method,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,6,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"` // retries with the same key return the original payment
@@ -268,9 +268,9 @@ func (x *ProcessPaymentRequest) GetUserId() string {
 	return ""
 }
 
-func (x *ProcessPaymentRequest) GetAmount() float64 {
+func (x *ProcessPaymentRequest) GetAmountCents() int64 {
 	if x != nil {
-		return x.Amount
+		return x.AmountCents
 	}
 	return 0
 }
@@ -700,12 +700,12 @@ var File_payment_payment_proto protoreflect.FileDescriptor
 
 const file_payment_payment_proto_rawDesc = "" +
 	"\n" +
-	"\x15payment/payment.proto\x12\apayment\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb2\x03\n" +
+	"\x15payment/payment.proto\x12\apayment\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbd\x03\n" +
 	"\aPayment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12\x16\n" +
-	"\x06amount\x18\x04 \x01(\x01R\x06amount\x12\x1a\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\x12!\n" +
+	"\famount_cents\x18\x04 \x01(\x03R\vamountCents\x12\x1a\n" +
 	"\bcurrency\x18\x05 \x01(\tR\bcurrency\x12.\n" +
 	"\x06status\x18\x06 \x01(\x0e2\x16.payment.PaymentStatusR\x06status\x12\x16\n" +
 	"\x06method\x18\a \x01(\tR\x06method\x12!\n" +
@@ -716,11 +716,11 @@ const file_payment_payment_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc0\x01\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcb\x01\n" +
 	"\x15ProcessPaymentRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x01R\x06amount\x12\x1a\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12!\n" +
+	"\famount_cents\x18\x03 \x01(\x03R\vamountCents\x12\x1a\n" +
 	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12\x16\n" +
 	"\x06method\x18\x05 \x01(\tR\x06method\x12'\n" +
 	"\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\"D\n" +

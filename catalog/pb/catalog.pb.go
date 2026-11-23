@@ -28,7 +28,7 @@ type Product struct {
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Price         float64                `protobuf:"fixed64,4,opt,name=price,proto3" json:"price,omitempty"`
+	PriceCents    int64                  `protobuf:"varint,4,opt,name=price_cents,json=priceCents,proto3" json:"price_cents,omitempty"`
 	Sku           string                 `protobuf:"bytes,5,opt,name=sku,proto3" json:"sku,omitempty"`
 	Stock         int32                  `protobuf:"varint,6,opt,name=stock,proto3" json:"stock,omitempty"`
 	Images        []string               `protobuf:"bytes,7,rep,name=images,proto3" json:"images,omitempty"`
@@ -90,9 +90,9 @@ func (x *Product) GetDescription() string {
 	return ""
 }
 
-func (x *Product) GetPrice() float64 {
+func (x *Product) GetPriceCents() int64 {
 	if x != nil {
-		return x.Price
+		return x.PriceCents
 	}
 	return 0
 }
@@ -144,7 +144,7 @@ type CreateProductRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Price         float64                `protobuf:"fixed64,3,opt,name=price,proto3" json:"price,omitempty"`
+	PriceCents    int64                  `protobuf:"varint,3,opt,name=price_cents,json=priceCents,proto3" json:"price_cents,omitempty"`
 	Sku           string                 `protobuf:"bytes,4,opt,name=sku,proto3" json:"sku,omitempty"`
 	Stock         int32                  `protobuf:"varint,5,opt,name=stock,proto3" json:"stock,omitempty"`
 	Images        []string               `protobuf:"bytes,6,rep,name=images,proto3" json:"images,omitempty"`
@@ -197,9 +197,9 @@ func (x *CreateProductRequest) GetDescription() string {
 	return ""
 }
 
-func (x *CreateProductRequest) GetPrice() float64 {
+func (x *CreateProductRequest) GetPriceCents() int64 {
 	if x != nil {
-		return x.Price
+		return x.PriceCents
 	}
 	return 0
 }
@@ -500,7 +500,7 @@ type UpdateProductRequest struct {
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Price         float64                `protobuf:"fixed64,4,opt,name=price,proto3" json:"price,omitempty"`
+	PriceCents    int64                  `protobuf:"varint,4,opt,name=price_cents,json=priceCents,proto3" json:"price_cents,omitempty"`
 	Stock         int32                  `protobuf:"varint,5,opt,name=stock,proto3" json:"stock,omitempty"`
 	Images        []string               `protobuf:"bytes,6,rep,name=images,proto3" json:"images,omitempty"`
 	Category      string                 `protobuf:"bytes,7,opt,name=category,proto3" json:"category,omitempty"`
@@ -559,9 +559,9 @@ func (x *UpdateProductRequest) GetDescription() string {
 	return ""
 }
 
-func (x *UpdateProductRequest) GetPrice() float64 {
+func (x *UpdateProductRequest) GetPriceCents() int64 {
 	if x != nil {
-		return x.Price
+		return x.PriceCents
 	}
 	return 0
 }
@@ -895,13 +895,13 @@ func (x *StockItem) GetQuantity() int32 {
 }
 
 type ReservedItem struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProductId     string                 `protobuf:"bytes,1,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
-	ProductName   string                 `protobuf:"bytes,2,opt,name=product_name,json=productName,proto3" json:"product_name,omitempty"`
-	Quantity      int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	UnitPrice     float64                `protobuf:"fixed64,4,opt,name=unit_price,json=unitPrice,proto3" json:"unit_price,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ProductId      string                 `protobuf:"bytes,1,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
+	ProductName    string                 `protobuf:"bytes,2,opt,name=product_name,json=productName,proto3" json:"product_name,omitempty"`
+	Quantity       int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	UnitPriceCents int64                  `protobuf:"varint,4,opt,name=unit_price_cents,json=unitPriceCents,proto3" json:"unit_price_cents,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ReservedItem) Reset() {
@@ -955,9 +955,9 @@ func (x *ReservedItem) GetQuantity() int32 {
 	return 0
 }
 
-func (x *ReservedItem) GetUnitPrice() float64 {
+func (x *ReservedItem) GetUnitPriceCents() int64 {
 	if x != nil {
-		return x.UnitPrice
+		return x.UnitPriceCents
 	}
 	return 0
 }
@@ -1151,12 +1151,13 @@ var File_catalog_catalog_proto protoreflect.FileDescriptor
 
 const file_catalog_catalog_proto_rawDesc = "" +
 	"\n" +
-	"\x15catalog/catalog.proto\x12\acatalog\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb7\x02\n" +
+	"\x15catalog/catalog.proto\x12\acatalog\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc2\x02\n" +
 	"\aProduct\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x14\n" +
-	"\x05price\x18\x04 \x01(\x01R\x05price\x12\x10\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vprice_cents\x18\x04 \x01(\x03R\n" +
+	"priceCents\x12\x10\n" +
 	"\x03sku\x18\x05 \x01(\tR\x03sku\x12\x14\n" +
 	"\x05stock\x18\x06 \x01(\x05R\x05stock\x12\x16\n" +
 	"\x06images\x18\a \x03(\tR\x06images\x12\x1a\n" +
@@ -1165,11 +1166,12 @@ const file_catalog_catalog_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xbe\x01\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc9\x01\n" +
 	"\x14CreateProductRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x14\n" +
-	"\x05price\x18\x03 \x01(\x01R\x05price\x12\x10\n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vprice_cents\x18\x03 \x01(\x03R\n" +
+	"priceCents\x12\x10\n" +
 	"\x03sku\x18\x04 \x01(\tR\x03sku\x12\x14\n" +
 	"\x05stock\x18\x05 \x01(\x05R\x05stock\x12\x16\n" +
 	"\x06images\x18\x06 \x03(\tR\x06images\x12\x1a\n" +
@@ -1188,12 +1190,13 @@ const file_catalog_catalog_proto_rawDesc = "" +
 	"\bproducts\x18\x01 \x03(\v2\x10.catalog.ProductR\bproducts\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x12\n" +
 	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"\xbc\x01\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"\xc7\x01\n" +
 	"\x14UpdateProductRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x14\n" +
-	"\x05price\x18\x04 \x01(\x01R\x05price\x12\x14\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vprice_cents\x18\x04 \x01(\x03R\n" +
+	"priceCents\x12\x14\n" +
 	"\x05stock\x18\x05 \x01(\x05R\x05stock\x12\x16\n" +
 	"\x06images\x18\x06 \x03(\tR\x06images\x12\x1a\n" +
 	"\bcategory\x18\a \x01(\tR\bcategory\"C\n" +
@@ -1214,14 +1217,13 @@ const file_catalog_catalog_proto_rawDesc = "" +
 	"\tStockItem\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\x8b\x01\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\x96\x01\n" +
 	"\fReservedItem\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12!\n" +
 	"\fproduct_name\x18\x02 \x01(\tR\vproductName\x12\x1a\n" +
-	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12\x1d\n" +
-	"\n" +
-	"unit_price\x18\x04 \x01(\x01R\tunitPrice\"Z\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\x12(\n" +
+	"\x10unit_price_cents\x18\x04 \x01(\x03R\x0eunitPriceCents\"Z\n" +
 	"\x13ReserveStockRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12(\n" +
 	"\x05items\x18\x02 \x03(\v2\x12.catalog.StockItemR\x05items\"C\n" +
