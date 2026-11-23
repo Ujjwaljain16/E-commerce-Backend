@@ -74,6 +74,8 @@ to backend services. Services do not re-validate tokens. In Kubernetes, NetworkP
 gateway the only pod reachable from outside the namespace.
 
 - Access and refresh tokens carry a `typ` claim and are not interchangeable (previously a refresh token worked as an access token for 7 days).
+- Refresh tokens are recorded in `refresh_tokens` and are single use: every refresh rotates to a new one. Presenting an already-used refresh token is treated as theft and revokes all of that user's sessions. `Logout`, password change and account deletion revoke them too. Refresh re-reads the account, so deactivation and role changes apply within one access-token lifetime.
+- Access tokens are stateless and stay valid for up to 15 minutes after logout; that window is the price of not hitting a database on every request.
 - Self-registration always creates `USER`; the first `ADMIN` is bootstrapped from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Ownership checks live in the gateway; another user's order returns `NOT_FOUND`, not `FORBIDDEN`, so IDs can't be probed.
 - `JWT_SECRET` is required (32+ chars); there is no default secret anymore.
