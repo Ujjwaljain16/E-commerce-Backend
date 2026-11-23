@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphql-gateway
+  labels:
+    app: graphql-gateway
+    tier: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: graphql-gateway
+  template:
+    metadata:
+      labels:
+        app: graphql-gateway
+        tier: gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: graphql
+          image: ghcr.io/ujjwaljain16/ecommerce-graphql:latest
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: ACCOUNT_SERVICE_ADDR
+              value: "account-service:50051"
+            - name: CATALOG_SERVICE_ADDR
+              value: "catalog-service:50052"
+            - name: ORDER_SERVICE_ADDR
+              value: "order-service:50053"
+            - name: PAYMENT_SERVICE_ADDR
+              value: "payment-service:50054"
+            - name: NOTIFICATION_SERVICE_ADDR
+              value: "notification-service:50055"
+            - name: PLAYGROUND_ENABLED
+              value: "false"
+            - name: TRUST_PROXY
+              value: "true"
+            - name: RATE_LIMIT_RPS
+              value: "20"
+            - name: RATE_LIMIT_BURST
+              value: "40"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: JWT_SECRET
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-gateway
+  labels:
+    app: graphql-gateway
+spec:
+  selector:
+    app: graphql-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: graphql-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: graphql-gateway
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: graphql-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: graphql-gateway
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: graphql-gateway
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.ecommerce.local
+      http:
+        paths:
+          - path: /graphql
+            pathType: Prefix
+            backend:
+              service:
+                name: graphql-gateway
+                port:
+                  name: http

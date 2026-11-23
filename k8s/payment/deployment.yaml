@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: payment
+          image: ghcr.io/ujjwaljain16/ecommerce-payment:latest
+          ports:
+            - name: grpc
+              containerPort: 50054
+            - name: metrics
+              containerPort: 9093
+          env:
+            - name: PORT
+              value: "50054"
+            - name: METRICS_PORT
+              value: "9093"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: DATABASE_URL
+          readinessProbe:
+            grpc:
+              port: 50054
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - name: grpc
+      port: 50054
+      targetPort: grpc
+    - name: metrics
+      port: 9093
+      targetPort: metrics

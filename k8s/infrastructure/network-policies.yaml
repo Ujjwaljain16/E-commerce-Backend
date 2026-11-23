@@ -1,0 +1,33 @@
+# Only the gateway is reachable from outside the namespace. Backend services trust the user id
+# the gateway sends them, so they must never be reachable directly.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-within-namespace
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-from-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: graphql-gateway
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 8000

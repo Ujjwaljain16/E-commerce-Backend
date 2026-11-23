@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9094"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: notification
+          image: ghcr.io/ujjwaljain16/ecommerce-notification:latest
+          ports:
+            - name: grpc
+              containerPort: 50055
+            - name: metrics
+              containerPort: 9094
+          env:
+            - name: PORT
+              value: "50055"
+            - name: METRICS_PORT
+              value: "9094"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: ACCOUNT_SERVICE_ADDR
+              value: "account-service:50051"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: DATABASE_URL
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: SMTP_HOST
+                  optional: true
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: SMTP_PORT
+                  optional: true
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: SMTP_USERNAME
+                  optional: true
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: SMTP_PASSWORD
+                  optional: true
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: SMTP_FROM
+                  optional: true
+          readinessProbe:
+            grpc:
+              port: 50055
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - name: grpc
+      port: 50055
+      targetPort: grpc
+    - name: metrics
+      port: 9094
+      targetPort: metrics
